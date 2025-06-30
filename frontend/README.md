@@ -1,54 +1,95 @@
-# React + TypeScript + Vite
+# Billing App Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This is the **frontend** for the Billing App, built with **React**, **TypeScript**, and **Vite**.
+It provides a user-friendly interface for uploading receipts or bills, extracting key information using OCR (Optical Character Recognition), and submitting the data for further processing.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Features
 
-## Expanding the ESLint configuration
+- **Image Upload:** Upload a bill or receipt image directly from your device.
+- **OCR Extraction:** Uses [Tesseract.js](https://github.com/naptha/tesseract.js) to extract text from images in the browser.
+- **Smart Parsing:** Extracts structured data such as customer name, ride details, and price (with robust handling for rupee symbols and OCR quirks).
+- **Data Review:** Preview and edit extracted data before submission.
+- **Submission:** Send the structured data to the backend for storage or further processing.
+- **Modern UI:** Clean, responsive design with React and CSS.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+---
 
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+## Getting Started
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) (v16 or higher recommended)
+- [npm](https://www.npmjs.com/) or [yarn](https://yarnpkg.com/)
+
+### Installation
+
+```bash
+cd frontend
+npm install
+# or
+yarn install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### Running the Development Server
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
+```bash
+npm run dev
+# or
+yarn dev
 ```
+
+Open [http://localhost:5173](http://localhost:5173) in your browser.
+
+---
+
+## Project Structure
+
+- `src/App.tsx` — Main React app, handles UI and workflow.
+- `src/services/OcrService.ts` — Image preprocessing, OCR, and text parsing logic.
+- `src/assets/` — Static assets and images.
+- `src/App.css` — Main styles.
+
+---
+
+## Key Technologies
+
+- **React 19** — UI library
+- **TypeScript** — Type safety
+- **Vite** — Fast build tool and dev server
+- **Tesseract.js** — OCR in the browser
+- **Axios** — HTTP requests
+
+---
+
+## OCR & Parsing Improvements
+
+- Uses Tesseract.js worker API for better performance and control.
+- Handles common OCR errors (e.g., rupee symbol misread as "2").
+- Extracts price robustly from various receipt formats.
+
+---
+
+## Linting & Formatting
+
+- ESLint is configured for TypeScript and React.
+- Run `npm run lint` to check code quality.
+
+---
+
+## Customization
+
+- Update parsing logic in `src/services/OcrService.ts` to handle new receipt formats or additional fields.
+- Adjust styles in `src/App.css` as needed.
+
+---
+
+## License
+
+This project is for demonstration and educational purposes.
+
+---
+
+**Questions or issues?**
+Open an issue or contact the maintainer.
