@@ -39,7 +39,7 @@ export const processImageWithOCR = async (image: File): Promise<string> => {
   const preprocessed = await preprocessImage(image);
   const worker = await createWorker('eng'); // Set language here
   try {
-    await worker.load();
+    // await worker.load(); // Removed as it's deprecated in v6+
     const params: Record<string, any> = {
       tessedit_char_whitelist: '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ₹:/.,',
     };
@@ -62,30 +62,100 @@ export const parseOCRText = (text: string): Record<string, string> => {
     const result: Record<string, string> = {};
     const lines = text.split('\n');
 
-    // Regex to match rupees in various formats
-    const rupeesRegex = /(₹|Rs\.?|INR|rupees?)\s*([0-9,]+(?:\.\d{1,2})?)/i;
-    const selectedPriceRegex = /SelectedPrice\s*([0-9]{2,})/i;
-    const fuzzyRupeeRegex = /(?:^|\n)2([0-9]{2,})/;
+    // Log the raw OCR output for debugging
+    console.log('RAW OCR:', text);
 
-    // 1. Search for 'SelectedPrice' followed by a number
-    const priceMatch = text.replace(/\s/g, '').match(selectedPriceRegex);
-    if (priceMatch) {
-      result['Selected Price'] = priceMatch[1];
-    } else {
-      // 2. Fuzzy: look for lines starting with '2' followed by a number (common OCR rupee error)
-      const fuzzyMatch = text.match(fuzzyRupeeRegex);
-      if (fuzzyMatch) {
-        result['Selected Price (fuzzy)'] = fuzzyMatch[1];
-      } else {
-        // 3. Fallback: look for rupees in various formats
-        const match = text.match(rupeesRegex);
-        if (match) {
-          result['Selected Price'] = match[2].replace(/,/g, '');
+    let foundPrice = null;
+
+    // 0. Prefer lines that are just a price (possibly with a currency symbol)
+    for (const line of lines) {
+      const trimmed = line.trim();
+      const match = trimmed.match(/^(₹|Rs\.?|INR|rupees?|R|P)?\s*([0-9]{1,6}(?:\.[0-9]{1,2})?)$/i);
+      if (
+        match &&
+        match[2] &&
+        match[2].length <= 6 &&
+        parseFloat(match[2]) > 10 &&
+        parseFloat(match[2]) < 10000
+      ) {
+        foundPrice = match[2];
+        break;
+      }
+    }
+
+    // 1. Prefer lines with 'total' and a price, or the next line after 'total'
+    if (!foundPrice) {
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (/total/i.test(line)) {
+          // Try to find a price in the same line
+          const match = line.match(/(₹|Rs\.?|INR|rupees?|R|P)?\s*([0-9]{1,6}(?:\.[0-9]{1,2})?)/i);
+          if (
+            match &&
+            match[2] &&
+            match[2].length <= 6 &&
+            parseFloat(match[2]) > 10 &&
+            parseFloat(match[2]) < 10000
+          ) {
+            foundPrice = match[2];
+            break;
+          }
+          // If not found, try the next line
+          if (i + 1 < lines.length) {
+            const nextLine = lines[i + 1];
+            const nextMatch = nextLine.match(/(₹|Rs\.?|INR|rupees?|R|P)?\s*([0-9]{1,6}(?:\.[0-9]{1,2})?)/i);
+            if (
+              nextMatch &&
+              nextMatch[2] &&
+              nextMatch[2].length <= 6 &&
+              parseFloat(nextMatch[2]) > 10 &&
+              parseFloat(nextMatch[2]) < 10000
+            ) {
+              foundPrice = nextMatch[2];
+              break;
+            }
+          }
         }
       }
     }
 
-    // 4. Continue with your existing line-by-line parsing for other fields
+    // 2. If not found, use the previous logic (first valid price in any line)
+    if (!foundPrice) {
+      for (const line of lines) {
+        if (/\bID\b/i.test(line) || /^[A-Z0-9\s-]+$/.test(line.trim())) continue;
+        const match = line.match(/(₹|Rs\.?|INR|rupees?|R|P)?\s*([0-9]{1,6}(?:\.[0-9]{1,2})?)/i);
+        if (
+          match &&
+          match[2] &&
+          match[2].length <= 6 &&
+          parseFloat(match[2]) > 10 &&
+          parseFloat(match[2]) < 10000
+        ) {
+          foundPrice = match[2];
+          break;
+        }
+      }
+    }
+
+    if (foundPrice) {
+      result['Selected Price'] = `₹ ${foundPrice}`;
+    } else {
+      // 3. Search for 'SelectedPrice' followed by a 1-6 digit number (with decimal)
+      const selectedPriceRegex = /SelectedPrice\s*([0-9]{1,6}(?:\.[0-9]{1,2})?)/i;
+      const priceMatch = text.replace(/\s/g, '').match(selectedPriceRegex);
+      if (priceMatch) {
+        result['Selected Price'] = `₹ ${priceMatch[1]}`;
+      } else {
+        // 4. Fuzzy: look for lines starting with '2' followed by 2-5 digits (lowest priority)
+        const fuzzyRupeeRegex = /(?:^|\n)2([0-9]{2,5})\b/;
+        const fuzzyMatch = text.match(fuzzyRupeeRegex);
+        if (fuzzyMatch) {
+          result['Selected Price (fuzzy)'] = `₹${fuzzyMatch[1]}`;
+        }
+      }
+    }
+
+    // 5. Continue with your existing line-by-line parsing for other fields
     lines.forEach(line => {
         if (line.match(/date/i)) {
             result['Date'] = line.split(/date[:\s]+/i)[1] || '';
