@@ -157,7 +157,11 @@ export const parseOCRText = (text: string): Record<string, string> => {
 
     // 5. Continue with your existing line-by-line parsing for other fields
     lines.forEach(line => {
-        if (line.match(/date/i)) {
+        // Improved date extraction
+        const dateMatch = line.match(/(\d{1,2}[\-/ ]?(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\-/ ]?\d{2,4})|(\d{1,2}[\-/]\d{1,2}[\-/]\d{2,4})|(\d{4}[\-/]\d{1,2}[\-/]\d{1,2})/i);
+        if (dateMatch && !result['Date']) {
+            result['Date'] = dateMatch[0];
+        } else if (line.match(/date/i) && !result['Date']) {
             result['Date'] = line.split(/date[:\s]+/i)[1] || '';
         } else if (line.match(/total/i)) {
             result['Total Amount'] = line.match(/\d+\.\d{2}/)?.[0] || '';
@@ -184,17 +188,20 @@ export const parseOCRText = (text: string): Record<string, string> => {
 
 // Send data to backend for processing
 export const saveData = async (
-    name: string, 
-    email: string, 
-    category: string, 
-    data: Record<string, string>
+    date: string,
+    type: string,
+    amount: string,
+    image: File
 ): Promise<boolean> => {
   try {
-    await axios.post('http://localhost:3001/api/submit', {
-      name,
-      email,
-      category,
-      data,
+    const formData = new FormData();
+    formData.append('date', date);
+    formData.append('type', type);
+    formData.append('amount', amount);
+    formData.append('image', image);
+    await fetch('http://localhost:3001/api/submit', {
+      method: 'POST',
+      body: formData,
     });
     return true;
   } catch (error) {
