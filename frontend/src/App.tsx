@@ -14,6 +14,9 @@ function MainApp() {
   const [date, setDate] = useState('');
   const [amount, setAmount] = useState('');
   const [showPreview, setShowPreview] = useState(false);
+  const [images, setImages] = useState<File[]>([]);
+  const [ocrResults, setOcrResults] = useState<Array<{ result: any, date: string, amount: string, status: string }>>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
@@ -24,24 +27,45 @@ function MainApp() {
     }
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    setImages(files);
+    setOcrResults(files.map(() => ({ result: null, date: '', amount: '', status: '' })));
+    setCurrentIndex(0);
+  };
+
   const handleProcessImage = async () => {
-    if (!image) {
-      setStatus('Please select an image first.');
-      return;
-    }
-    setStatus('Processing OCR...');
-    setShowPreview(true);
+    if (!images[currentIndex]) return;
+    const updatedOcrResults = [...ocrResults];
+    updatedOcrResults[currentIndex].status = 'Processing OCR...';
+    setOcrResults(updatedOcrResults);
     try {
-      const text = await processImageWithOCR(image);
+      const text = await processImageWithOCR(images[currentIndex]);
       const data = parseOCRText(text);
-      setOcrResult(data);
-      setDate(data['Date'] || '');
-      setAmount(data['Selected Price'] || data['Total Amount'] || '');
-      setStatus('OCR processing complete. Review and submit.');
+      updatedOcrResults[currentIndex] = {
+        result: data,
+        date: data['Date'] || '',
+        amount: data['Selected Price'] || data['Selected Price (max fallback)'] || data['Total Amount'] || '',
+        status: 'OCR processing complete. Review and submit.'
+      };
+      setOcrResults([...updatedOcrResults]);
     } catch (error) {
-      setStatus('Error processing image. Please try again.');
+      updatedOcrResults[currentIndex].status = 'Error processing image. Please try again.';
+      setOcrResults([...updatedOcrResults]);
       console.error(error);
     }
+  };
+
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const updatedOcrResults = [...ocrResults];
+    updatedOcrResults[currentIndex].amount = e.target.value;
+    setOcrResults(updatedOcrResults);
+  };
+
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const updatedOcrResults = [...ocrResults];
+    updatedOcrResults[currentIndex].date = e.target.value;
+    setOcrResults(updatedOcrResults);
   };
 
   const handleSubmit = async () => {
@@ -88,107 +112,116 @@ function MainApp() {
             <option value="Travel">Travel</option>
             <option value="Miscellaneous">Miscellaneous</option>
           </select>
-          <input type="file" accept="image/*" onChange={handleImageUpload} />
-          <button onClick={handleProcessImage} disabled={!image}>
-            Process Image
-          </button>
-          {showPreview && image && (
+          <input type="file" accept="image/*" multiple onChange={handleFileChange} />
+          {images.length > 0 && (
+            <div style={{ margin: '16px 0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <button onClick={() => setCurrentIndex(i => Math.max(i - 1, 0))} disabled={currentIndex === 0} style={{ marginRight: 16 }}>&lt;</button>
+              <span>Image {currentIndex + 1} of {images.length}</span>
+              <button onClick={() => setCurrentIndex(i => Math.min(i + 1, images.length - 1))} disabled={currentIndex === images.length - 1} style={{ marginLeft: 16 }}>&gt;</button>
+            </div>
+          )}
+          {images[currentIndex] && (
             <div style={{ marginTop: 16, display: 'flex', justifyContent: 'center' }}>
-              <img src={URL.createObjectURL(image)} alt="Preview" style={{ maxWidth: 400, maxHeight: 400, display: 'block' }} />
+              <img src={URL.createObjectURL(images[currentIndex])} alt="Preview" style={{ maxWidth: 400, maxHeight: 400, display: 'block' }} />
+            </div>
+          )}
+          {images[currentIndex] && (
+            <button onClick={handleProcessImage} style={{ margin: '16px 0' }}>
+              Process Image
+            </button>
+          )}
+          {ocrResults[currentIndex] && ocrResults[currentIndex].status && (
+            <p className="status">{ocrResults[currentIndex].status}</p>
+          )}
+          {ocrResults[currentIndex] && ocrResults[currentIndex].result && (
+            <div className="results-container" style={{
+              marginTop: 24,
+              maxWidth: 400,
+              marginLeft: 'auto',
+              marginRight: 'auto',
+              padding: 24,
+              background: '#fff',
+              borderRadius: 12,
+              boxShadow: '0 4px 24px 0 rgba(0,0,0,0.10)',
+              border: '1px solid #e0e0e0',
+            }}>
+              <h2 style={{
+                fontSize: 22,
+                fontWeight: 700,
+                marginBottom: 20,
+                color: '#222',
+                letterSpacing: 0.2,
+              }}>Extracted Data</h2>
+              <form onSubmit={e => { e.preventDefault(); handleSubmit(); }}>
+                <div style={{ marginBottom: 18 }}>
+                  <label htmlFor="extracted-amount" style={{ display: 'block', fontWeight: 600, marginBottom: 6, color: '#444' }}>Price</label>
+                  <input
+                    id="extracted-amount"
+                    type="text"
+                    value={ocrResults[currentIndex].amount}
+                    onChange={handleAmountChange}
+                    placeholder="Amount"
+                    style={{
+                      width: '100%',
+                      padding: '12px 10px',
+                      borderRadius: 6,
+                      border: '1px solid #bdbdbd',
+                      background: '#f9f9f9',
+                      color: '#222',
+                      fontSize: 16,
+                      fontWeight: 500,
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+                <div style={{ marginBottom: 18 }}>
+                  <label htmlFor="extracted-date" style={{ display: 'block', fontWeight: 600, marginBottom: 6, color: '#444' }}>Date</label>
+                  <input
+                    id="extracted-date"
+                    type="text"
+                    value={ocrResults[currentIndex].date}
+                    onChange={handleDateChange}
+                    placeholder="Date"
+                    style={{
+                      width: '100%',
+                      padding: '12px 10px',
+                      borderRadius: 6,
+                      border: '1px solid #bdbdbd',
+                      background: '#f9f9f9',
+                      color: '#222',
+                      fontSize: 16,
+                      fontWeight: 500,
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  style={{
+                    padding: '12px 0',
+                    width: '100%',
+                    borderRadius: 6,
+                    background: '#1976d2',
+                    color: '#fff',
+                    border: 'none',
+                    fontWeight: 700,
+                    fontSize: 16,
+                    letterSpacing: 0.5,
+                    marginTop: 8,
+                    cursor: 'pointer',
+                    transition: 'background 0.2s',
+                  }}
+                  onMouseOver={e => (e.currentTarget.style.background = '#1565c0')}
+                  onMouseOut={e => (e.currentTarget.style.background = '#1976d2')}
+                >
+                  Submit Data
+                </button>
+              </form>
             </div>
           )}
         </div>
-
-        {status && <p className="status">{status}</p>}
-
-        {ocrResult && (
-          <div className="results-container" style={{
-            marginTop: 24,
-            maxWidth: 400,
-            marginLeft: 'auto',
-            marginRight: 'auto',
-            padding: 24,
-            background: '#fff',
-            borderRadius: 12,
-            boxShadow: '0 4px 24px 0 rgba(0,0,0,0.10)',
-            border: '1px solid #e0e0e0',
-          }}>
-            <h2 style={{
-              fontSize: 22,
-              fontWeight: 700,
-              marginBottom: 20,
-              color: '#222',
-              letterSpacing: 0.2,
-            }}>Extracted Data</h2>
-            <form onSubmit={e => { e.preventDefault(); handleSubmit(); }}>
-              <div style={{ marginBottom: 18 }}>
-                <label htmlFor="extracted-amount" style={{ display: 'block', fontWeight: 600, marginBottom: 6, color: '#444' }}>Price</label>
-                <input
-                  id="extracted-amount"
-                  type="text"
-                  value={amount}
-                  onChange={e => setAmount(e.target.value)}
-                  placeholder="Amount"
-                  style={{
-                    width: '100%',
-                    padding: '12px 10px',
-                    borderRadius: 6,
-                    border: '1px solid #bdbdbd',
-                    background: '#f9f9f9',
-                    color: '#222',
-                    fontSize: 16,
-                    fontWeight: 500,
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
-              <div style={{ marginBottom: 18 }}>
-                <label htmlFor="extracted-date" style={{ display: 'block', fontWeight: 600, marginBottom: 6, color: '#444' }}>Date</label>
-                <input
-                  id="extracted-date"
-                  type="text"
-                  value={date}
-                  onChange={e => setDate(e.target.value)}
-                  placeholder="Date"
-                  style={{
-                    width: '100%',
-                    padding: '12px 10px',
-                    borderRadius: 6,
-                    border: '1px solid #bdbdbd',
-                    background: '#f9f9f9',
-                    color: '#222',
-                    fontSize: 16,
-                    fontWeight: 500,
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                  }}
-                />
-            </div>
-              <button
-                type="submit"
-                style={{
-                  padding: '12px 0',
-                  width: '100%',
-                  borderRadius: 6,
-                  background: '#1976d2',
-                  color: '#fff',
-                  border: 'none',
-                  fontWeight: 700,
-                  fontSize: 16,
-                  letterSpacing: 0.5,
-                  marginTop: 8,
-                  cursor: 'pointer',
-                  transition: 'background 0.2s',
-                }}
-                onMouseOver={e => (e.currentTarget.style.background = '#1565c0')}
-                onMouseOut={e => (e.currentTarget.style.background = '#1976d2')}
-              >
-                Submit Data
-              </button>
-            </form>
-          </div>
-        )}
       </main>
     </div>
   );
