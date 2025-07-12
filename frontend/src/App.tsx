@@ -69,18 +69,28 @@ function MainApp() {
   };
 
   const handleSubmit = async () => {
-    if (!image || !date || !amount) {
+    if (!images[currentIndex] || !ocrResults[currentIndex].date || !ocrResults[currentIndex].amount) {
       setStatus('Please process an image and review the extracted fields.');
       return;
     }
     setStatus('Saving data...');
-    const success = await saveData(date, category, amount, image);
+    const success = await saveData(
+      ocrResults[currentIndex].date, 
+      category, 
+      ocrResults[currentIndex].amount, 
+      images[currentIndex]
+    );
     if (success) {
       setStatus('Data saved successfully!');
-      setImage(null);
-      setOcrResult(null);
-      setDate('');
-      setAmount('');
+      // Move to next image or reset
+      if (currentIndex < images.length - 1) {
+        setCurrentIndex(currentIndex + 1);
+      } else {
+        // All images processed, reset
+        setImages([]);
+        setOcrResults([]);
+        setCurrentIndex(0);
+      }
     } else {
       setStatus('Failed to save data. Please check the console.');
     }

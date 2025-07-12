@@ -2,12 +2,18 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const multer = require('multer');
-const ExcelJS = require('exceljs');
-const { Document, Packer, Paragraph, Table, TableRow, TableCell } = require('docx');
 const fs = require('fs');
 const path = require('path');
 const { imageSize } = require('image-size');
 const sharp = require('sharp');
+const { 
+  initializeGoogleSheets, 
+  createSheet, 
+  appendToSheet, 
+  getSheetData, 
+  getSpreadsheetId, 
+  saveSpreadsheetId 
+} = require('./googleSheetsService');
 
 const app = express();
 const port = 3001; // Port for the backend server
@@ -17,23 +23,54 @@ app.use(bodyParser.json());
 
 const upload = multer({ dest: 'backend/data/' });
 
-// Helper: Append to Excel file (read, append, overwrite)
-async function appendToExcel(date, type, amount) {
-  const filePath = path.join(__dirname, 'data', 'expenses.xlsx');
-  const workbook = new ExcelJS.Workbook();
-  if (fs.existsSync(filePath)) {
-    await workbook.xlsx.readFile(filePath);
-    worksheet = workbook.getWorksheet('Expenses') || workbook.worksheets[0];
+// Initialize Google Sheets on startup
+let isGoogleSheetsReady = false;
+initializeGoogleSheets().then(ready => {
+  isGoogleSheetsReady = ready;
+  if (ready) {
+    console.log('Google Sheets API initialized successfully');
   } else {
-    worksheet = workbook.addWorksheet('Expenses');
-    worksheet.addRow(['Date', 'Type', 'Amount']);
+    console.log('Google Sheets API not initialized - check credentials');
   }
-  worksheet.addRow([date, type, amount]);
-  await workbook.xlsx.writeFile(filePath);
+});
+
+// Helper: Append to Google Sheets
+async function appendToGoogleSheets(date, type, amount, imageName) {
+  try {
+    let spreadsheetId = getSpreadsheetId();
+    
+    // Create new sheet if none exists
+    if (!spreadsheetId) {
+      spreadsheetId = await createSheet();
+      if (spreadsheetId) {
+        saveSpreadsheetId(spreadsheetId);
+      } else {
+        throw new Error('Failed to create Google Sheet');
+      }
+    }
+
+    const data = {
+      date,
+      type,
+      amount,
+      imageUrl: `http://localhost:${port}/images/${imageName}`,
+      imageName
+    };
+
+    const success = await appendToSheet(spreadsheetId, data);
+    if (!success) {
+      throw new Error('Failed to append to Google Sheets');
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error appending to Google Sheets:', error);
+    return false;
+  }
 }
 
-// Helper: Store image and regenerate Word file with all images
-async function storeImageAndRegenerateWord(imagePath) {
+// Helper: Store image in local directory
+async function storeImage(imagePath) {
   const imagesDir = path.join(__dirname, 'data', 'images');
   if (!fs.existsSync(imagesDir)) {
     fs.mkdirSync(imagesDir);
@@ -42,34 +79,7 @@ async function storeImageAndRegenerateWord(imagePath) {
   const imageName = `receipt_${Date.now()}${path.extname(imagePath)}`;
   const destPath = path.join(imagesDir, imageName);
   fs.copyFileSync(imagePath, destPath);
-
-  // Regenerate the Word file with all images
-  const filePath = path.join(__dirname, 'data', 'receipts.docx');
-  const doc = new Document();
-  const imageFiles = fs.readdirSync(imagesDir).filter(f => /\.(png|jpg|jpeg)$/i.test(f));
-  const children = [];
-  for (let idx = 0; idx < imageFiles.length; idx++) {
-    const img = imageFiles[idx];
-    const imgPath = path.join(imagesDir, img);
-    try {
-      const imageBuffer = fs.readFileSync(imgPath);
-      console.log('Processing image:', imgPath, 'Buffer length:', imageBuffer.length);
-      if (!imageBuffer || imageBuffer.length === 0) {
-        console.warn('Skipping invalid or empty image:', imgPath);
-        continue;
-      }
-      const image = doc.createImage(imageBuffer);
-      children.push(new Paragraph(`Receipt Image #${idx + 1}`));
-      children.push(image);
-    } catch (err) {
-      console.error('Failed to add image to Word:', imgPath, err);
-    }
-  }
-  if (children.length > 0) {
-    doc.addSection({ children });
-    const buffer = await Packer.toBuffer(doc);
-    fs.writeFileSync(filePath, buffer);
-  }
+  return imageName;
 }
 
 // Update endpoint to use new logic (Word file generation removed)
@@ -120,32 +130,40 @@ app.post('/api/submit', upload.single('image'), async (req, res) => {
     const destPath = path.join(imagesDir, uniqueName);
     fs.copyFileSync(imageFile.path, destPath);
     console.log('Saved image:', destPath, 'Size:', stats.size);
-    await appendToExcel(date, type, amount);
+    await appendToGoogleSheets(date, type, amount, uniqueName);
     fs.unlinkSync(imageFile.path);
-    res.status(200).json({ message: 'Data appended to Excel and image saved.' });
+    res.status(200).json({ message: 'Data appended to Google Sheets and image saved.' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Failed to append data.' });
   }
 });
 
-// Endpoint to download the Excel file
-app.get('/api/download/excel', (req, res) => {
-  const filePath = path.join(__dirname, 'data', 'expenses.xlsx');
-  if (fs.existsSync(filePath)) {
-    res.download(filePath, 'expenses.xlsx');
+// Endpoint to get Google Sheets URL
+app.get('/api/sheets/url', (req, res) => {
+  const spreadsheetId = getSpreadsheetId();
+  if (spreadsheetId) {
+    const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
+    res.json({ url, spreadsheetId });
   } else {
-    res.status(404).json({ message: 'Excel file not found.' });
+    res.status(404).json({ message: 'Google Sheet not found. Please submit some data first.' });
   }
 });
 
-// Endpoint to download the Word file
-app.get('/api/download/word', (req, res) => {
-  const filePath = path.join(__dirname, 'data', 'receipts.docx');
-  if (fs.existsSync(filePath)) {
-    res.download(filePath, 'receipts.docx');
-  } else {
-    res.status(404).json({ message: 'Word file not found.' });
+// Endpoint to create a new Google Sheet
+app.post('/api/sheets/create', async (req, res) => {
+  try {
+    const spreadsheetId = await createSheet();
+    if (spreadsheetId) {
+      saveSpreadsheetId(spreadsheetId);
+      const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
+      res.json({ url, spreadsheetId, message: 'Google Sheet created successfully' });
+    } else {
+      res.status(500).json({ message: 'Failed to create Google Sheet' });
+    }
+  } catch (error) {
+    console.error('Error creating Google Sheet:', error);
+    res.status(500).json({ message: 'Failed to create Google Sheet' });
   }
 });
 
@@ -160,73 +178,30 @@ app.get('/api/images', (req, res) => {
   res.json(files);
 });
 
-// Endpoint to get Excel data as JSON
+// Endpoint to get Google Sheets data as JSON
 app.get('/api/expenses', async (req, res) => {
-  const filePath = path.join(__dirname, 'data', 'expenses.xlsx');
-  if (!fs.existsSync(filePath)) return res.json([]);
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.readFile(filePath);
-  const worksheet = workbook.getWorksheet('Expenses') || workbook.worksheets[0];
-  const rows = [];
-  worksheet.eachRow((row, rowNumber) => {
-    if (rowNumber === 1) return; // skip header
-    rows.push({
-      date: row.getCell(1).value,
-      type: row.getCell(2).value,
-      amount: row.getCell(3).value,
-    });
-  });
-  res.json(rows);
+  try {
+    const spreadsheetId = getSpreadsheetId();
+    if (!spreadsheetId) {
+      return res.json([]);
+    }
+    
+    const data = await getSheetData(spreadsheetId);
+    res.json(data);
+  } catch (error) {
+    console.error('Error getting expenses data:', error);
+    res.status(500).json({ message: 'Failed to get expenses data' });
+  }
 });
 
-// On-demand Word file generation endpoint
-app.get('/api/generate-word', async (req, res) => {
-  try {
-    console.log('Starting Word file generation...');
-    const imagesDir = path.join(__dirname, 'data', 'images');
-    const filePath = path.join(__dirname, 'data', 'receipts.docx');
-    const doc = new Document();
-    if (!fs.existsSync(imagesDir)) {
-      console.log('No images directory found.');
-      return res.status(404).json({ message: 'No images found.' });
-    }
-    const imageFiles = fs.readdirSync(imagesDir).filter(f => /\.(png|jpg|jpeg)$/i.test(f));
-    console.log('Found image files:', imageFiles);
-    if (imageFiles.length === 0) {
-      console.log('No valid images to generate Word file.');
-      return res.status(404).json({ message: 'No valid images to generate Word file.' });
-    }
-    // Add each image as a new page
-    for (const img of imageFiles) {
-      const imgPath = path.join(imagesDir, img);
-      try {
-        const imageBuffer = fs.readFileSync(imgPath);
-        const reencodedBuffer = await sharp(imageBuffer).toFormat('jpeg').toBuffer();
-        const dimensions = imageSize(reencodedBuffer);
-        console.log('Adding image:', imgPath, 'Buffer length:', reencodedBuffer.length, 'Dimensions:', dimensions);
-        const image = doc.createImage(reencodedBuffer, 400, 500);
-        doc.addSection({ children: [new Paragraph(img), image] });
-      } catch (err) {
-        console.error('Failed to add image to Word:', imgPath, err);
-        doc.addSection({ children: [new Paragraph('Failed to add image: ' + img)] });
-      }
-    }
-    console.log('Packing Word file...');
-    const buffer = await Packer.toBuffer(doc);
-    fs.writeFileSync(filePath, buffer);
-    console.log('Word file written to disk:', filePath);
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-    res.download(filePath, 'receipts.docx', (err) => {
-      if (err) {
-        console.error('Error sending Word file:', err);
-      } else {
-        console.log('Word file sent successfully.');
-      }
-    });
-  } catch (err) {
-    console.error('Failed to generate Word file:', err);
-    res.status(500).json({ message: 'Failed to generate Word file.' });
-  }
+// Endpoint to check Google Sheets status
+app.get('/api/sheets/status', (req, res) => {
+  const spreadsheetId = getSpreadsheetId();
+  res.json({ 
+    isReady: isGoogleSheetsReady,
+    hasSheet: !!spreadsheetId,
+    spreadsheetId 
+  });
 });
 
 app.listen(port, () => {
