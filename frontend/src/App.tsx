@@ -17,6 +17,22 @@ function MainApp() {
   const [images, setImages] = useState<File[]>([]);
   const [ocrResults, setOcrResults] = useState<Array<{ result: any, date: string, amount: string, status: string }>>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [modeOfTravel, setModeOfTravel] = useState('');
+  const [purpose, setPurpose] = useState('');
+  const [travelExpenses, setTravelExpenses] = useState('');
+  const [foodS1, setFoodS1] = useState('');
+  const [foodS2, setFoodS2] = useState('');
+  const [foodS3, setFoodS3] = useState('');
+  const [foodS4, setFoodS4] = useState('');
+  const [foodS5, setFoodS5] = useState('');
+  const [foodS6, setFoodS6] = useState('');
+  const [misc, setMisc] = useState('');
+  const [billDetails, setBillDetails] = useState('');
+  const [remarks, setRemarks] = useState('');
+  const [budgetHead, setBudgetHead] = useState('');
+  const [foodType, setFoodType] = useState('S1');
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files[0]) {
@@ -74,19 +90,57 @@ function MainApp() {
       return;
     }
     setStatus('Saving data...');
+    let data = {
+      date: ocrResults[currentIndex].date,
+      from: '',
+      to: '',
+      modeOfTravel: '',
+      purpose: '',
+      travelExpenses: '',
+      foodS1: '', foodS2: '', foodS3: '', foodS4: '', foodS5: '', foodS6: '',
+      misc: '',
+      amount: ocrResults[currentIndex].amount,
+      billDetails,
+      remarks,
+      budgetHead,
+      image: images[currentIndex]
+    };
+    if (category === 'Food') {
+      data[`food${foodType}`] = ocrResults[currentIndex].amount;
+    } else if (category === 'Travel') {
+      data.from = from;
+      data.to = to;
+      data.modeOfTravel = modeOfTravel;
+      data.purpose = purpose;
+      data.travelExpenses = ocrResults[currentIndex].amount;
+    } else if (category === 'Miscellaneous') {
+      data.misc = ocrResults[currentIndex].amount;
+    }
     const success = await saveData(
-      ocrResults[currentIndex].date, 
-      category, 
-      ocrResults[currentIndex].amount, 
+      data.date,
+      data.from,
+      data.to,
+      data.modeOfTravel,
+      data.purpose,
+      data.travelExpenses,
+      data.foodS1,
+      data.foodS2,
+      data.foodS3,
+      data.foodS4,
+      data.foodS5,
+      data.foodS6,
+      data.misc,
+      data.amount,
+      billDetails,
+      remarks,
+      budgetHead,
       images[currentIndex]
     );
     if (success) {
       setStatus('Data saved successfully!');
-      // Move to next image or reset
       if (currentIndex < images.length - 1) {
         setCurrentIndex(currentIndex + 1);
       } else {
-        // All images processed, reset
         setImages([]);
         setOcrResults([]);
         setCurrentIndex(0);
@@ -117,11 +171,35 @@ function MainApp() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
-          <select value={category} onChange={(e) => setCategory(e.target.value)}>
+          <select value={category} onChange={e => setCategory(e.target.value)}>
             <option value="Food">Food</option>
             <option value="Travel">Travel</option>
             <option value="Miscellaneous">Miscellaneous</option>
           </select>
+          {category === 'Food' && (
+            <>
+              <label>Food Type:</label>
+              <select value={foodType} onChange={e => setFoodType(e.target.value)}>
+                <option value="S1">S1</option>
+                <option value="S2">S2</option>
+                <option value="S3">S3</option>
+                <option value="S4">S4</option>
+                <option value="S5">S5</option>
+                <option value="S6">S6</option>
+              </select>
+            </>
+          )}
+          {category === 'Travel' && (
+            <>
+              <input type="text" placeholder="From" value={from} onChange={e => setFrom(e.target.value)} />
+              <input type="text" placeholder="To" value={to} onChange={e => setTo(e.target.value)} />
+              <input type="text" placeholder="Mode of Travel" value={modeOfTravel} onChange={e => setModeOfTravel(e.target.value)} />
+              <input type="text" placeholder="Purpose" value={purpose} onChange={e => setPurpose(e.target.value)} />
+            </>
+          )}
+          {category === 'Miscellaneous' && (
+            <input type="text" placeholder="Miscellaneous" value={misc} onChange={e => setMisc(e.target.value)} />
+          )}
           <input type="file" accept="image/*" multiple onChange={handleFileChange} />
           {images.length > 0 && (
             <div style={{ margin: '16px 0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

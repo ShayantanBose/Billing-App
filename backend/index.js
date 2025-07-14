@@ -35,7 +35,7 @@ initializeGoogleSheets().then(ready => {
 });
 
 // Helper: Append to Google Sheets
-async function appendToGoogleSheets(date, type, amount, imageName) {
+async function appendToGoogleSheets(data) {
   try {
     let spreadsheetId = getSpreadsheetId();
     
@@ -48,14 +48,6 @@ async function appendToGoogleSheets(date, type, amount, imageName) {
         throw new Error('Failed to create Google Sheet');
       }
     }
-
-    const data = {
-      date,
-      type,
-      amount,
-      imageUrl: `http://localhost:${port}/images/${imageName}`,
-      imageName
-    };
 
     const success = await appendToSheet(spreadsheetId, data);
     if (!success) {
@@ -85,9 +77,27 @@ async function storeImage(imagePath) {
 // Update endpoint to use new logic (Word file generation removed)
 app.post('/api/submit', upload.single('image'), async (req, res) => {
   try {
-    const { date, type, amount } = req.body;
+    const {
+      date,
+      from,
+      to,
+      modeOfTravel,
+      purpose,
+      travelExpenses,
+      foodS1,
+      foodS2,
+      foodS3,
+      foodS4,
+      foodS5,
+      foodS6,
+      misc,
+      amount,
+      billDetails,
+      remarks,
+      budgetHead
+    } = req.body;
     const imageFile = req.file;
-    if (!date || !type || !amount || !imageFile) {
+    if (!date || !amount || !imageFile) {
       console.warn('Missing required fields or image.');
       return res.status(400).json({ message: 'Missing required fields or image.' });
     }
@@ -130,7 +140,26 @@ app.post('/api/submit', upload.single('image'), async (req, res) => {
     const destPath = path.join(imagesDir, uniqueName);
     fs.copyFileSync(imageFile.path, destPath);
     console.log('Saved image:', destPath, 'Size:', stats.size);
-    await appendToGoogleSheets(date, type, amount, uniqueName);
+    await appendToGoogleSheets({
+      date,
+      from,
+      to,
+      modeOfTravel,
+      purpose,
+      travelExpenses,
+      foodS1,
+      foodS2,
+      foodS3,
+      foodS4,
+      foodS5,
+      foodS6,
+      misc,
+      amount,
+      billDetails,
+      remarks,
+      budgetHead,
+      imageName: uniqueName
+    });
     fs.unlinkSync(imageFile.path);
     res.status(200).json({ message: 'Data appended to Google Sheets and image saved.' });
   } catch (err) {

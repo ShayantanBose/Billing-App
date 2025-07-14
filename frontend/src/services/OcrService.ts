@@ -166,15 +166,43 @@ export const parseOCRText = (text: string): Record<string, string> => {
 // Send data to backend for processing
 export const saveData = async (
     date: string,
-    type: string,
+    from: string,
+    to: string,
+    modeOfTravel: string,
+    purpose: string,
+    travelExpenses: string,
+    foodS1: string,
+    foodS2: string,
+    foodS3: string,
+    foodS4: string,
+    foodS5: string,
+    foodS6: string,
+    misc: string,
     amount: string,
+    billDetails: string,
+    remarks: string,
+    budgetHead: string,
     image: File
 ): Promise<boolean> => {
   try {
     const formData = new FormData();
     formData.append('date', date);
-    formData.append('type', type);
+    formData.append('from', from);
+    formData.append('to', to);
+    formData.append('modeOfTravel', modeOfTravel);
+    formData.append('purpose', purpose);
+    formData.append('travelExpenses', travelExpenses);
+    formData.append('foodS1', foodS1);
+    formData.append('foodS2', foodS2);
+    formData.append('foodS3', foodS3);
+    formData.append('foodS4', foodS4);
+    formData.append('foodS5', foodS5);
+    formData.append('foodS6', foodS6);
+    formData.append('misc', misc);
     formData.append('amount', amount);
+    formData.append('billDetails', billDetails);
+    formData.append('remarks', remarks);
+    formData.append('budgetHead', budgetHead);
     formData.append('image', image);
     await fetch('http://localhost:3001/api/submit', {
       method: 'POST',

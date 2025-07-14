@@ -49,7 +49,6 @@ async function createSheet(title = 'Receipts Database') {
       const initialized = await initializeGoogleSheets();
       if (!initialized) return null;
     }
-
     const resource = {
       properties: {
         title: title
@@ -60,24 +59,20 @@ async function createSheet(title = 'Receipts Database') {
             title: 'Receipts',
             gridProperties: {
               rowCount: 1000,
-              columnCount: 10
+              columnCount: 16 // A-P
             }
           }
         }
       ]
     };
-
     const response = await sheets.spreadsheets.create({
       resource,
       fields: 'spreadsheetId'
     });
-
     const spreadsheetId = response.data.spreadsheetId;
     console.log(`Created Google Sheet with ID: ${spreadsheetId}`);
-    
     // Set up headers
     await updateHeaders(spreadsheetId);
-    
     return spreadsheetId;
   } catch (error) {
     console.error('Error creating Google Sheet:', error);
@@ -88,65 +83,47 @@ async function createSheet(title = 'Receipts Database') {
 // Update headers in the sheet
 async function updateHeaders(spreadsheetId) {
   try {
-    const headers = [
-      'Date',
-      'Type',
-      'Amount',
-      'Image URL',
-      'Image Name',
-      'Upload Time',
-      'Status'
+    // 18 columns: A to R
+    const mainHeaders = [
+      'Sl. No.', // A
+      'Date',    // B
+      'Station', '', // C, D (From, To)
+      'Mode of Travel', // E
+      'Purpose and other particulars', // F
+      'Travel Expenses (Rs)', // G
+      'Food', '', '', '', '', '', // H-M (S1-S6)
+      'Miscellaneous (Rs)', // N
+      'Total Amount (Rs)', // O
+      'Bill Details (Yes/ No)', // P
+      'Remarks', // Q
+      'Budget head' // R
     ];
-
-    const range = 'Receipts!A1:G1';
-    const valueRange = {
-      values: [headers]
-    };
-
+    const subHeaders = [
+      '', // Sl. No.
+      '', // Date
+      'From', 'To', // Station
+      '', // Mode of Travel
+      '', // Purpose
+      '', // Travel Expenses
+      'S1', 'S2', 'S3', 'S4', 'S5', 'S6', // Food
+      '', // Miscellaneous
+      '', // Total Amount
+      '', // Bill Details
+      '', // Remarks
+      ''  // Budget head
+    ];
+    // Ensure both arrays have 18 elements
+    if (mainHeaders.length !== 18 || subHeaders.length !== 18) {
+      throw new Error(`Header length mismatch: mainHeaders=${mainHeaders.length}, subHeaders=${subHeaders.length}`);
+    }
+    console.log('Writing new headers to Receipts!A1:R2...');
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range,
+      range: 'Receipts!A1:R2',
       valueInputOption: 'RAW',
-      resource: valueRange
+      resource: { values: [mainHeaders, subHeaders] }
     });
-
-    // Format headers
-    await sheets.spreadsheets.batchUpdate({
-      spreadsheetId,
-      resource: {
-        requests: [
-          {
-            repeatCell: {
-              range: {
-                sheetId: 0,
-                startRowIndex: 0,
-                endRowIndex: 1
-              },
-              cell: {
-                userEnteredFormat: {
-                  backgroundColor: {
-                    red: 0.2,
-                    green: 0.6,
-                    blue: 0.8
-                  },
-                  textFormat: {
-                    bold: true,
-                    foregroundColor: {
-                      red: 1,
-                      green: 1,
-                      blue: 1
-                    }
-                  }
-                }
-              },
-              fields: 'userEnteredFormat(backgroundColor,textFormat)'
-            }
-          }
-        ]
-      }
-    });
-
-    console.log('Headers updated successfully');
+    console.log('Headers written successfully!');
   } catch (error) {
     console.error('Error updating headers:', error);
   }
@@ -160,29 +137,44 @@ async function appendToSheet(spreadsheetId, data) {
       if (!initialized) return false;
     }
 
-    const values = [
-      [
-        data.date,
-        data.type,
-        data.amount,
-        data.imageUrl || '',
-        data.imageName || '',
-        new Date().toISOString(),
-        'Active'
-      ]
-    ];
+    // Get current number of rows to determine Sl. No.
+    const getRowsResp = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: 'Receipts!A3:A', // skip header rows
+    });
+    const currentRows = getRowsResp.data.values ? getRowsResp.data.values.length : 0;
+    const slNo = currentRows + 1; // Sl. No. starts at 1
 
-    const range = 'Receipts!A:G';
-    const valueRange = {
-      values: values
-    };
+    // Prepare row: 18 columns (A-R)
+    const row = Array(18).fill('');
+    row[0] = slNo; // Sl. No.
+    row[1] = data.date || '';
+    row[2] = data.from || '';
+    row[3] = data.to || '';
+    row[4] = data.modeOfTravel || '';
+    row[5] = data.purpose || '';
+    row[6] = data.travelExpenses || '';
+    row[7] = data.foodS1 || '';
+    row[8] = data.foodS2 || '';
+    row[9] = data.foodS3 || '';
+    row[10] = data.foodS4 || '';
+    row[11] = data.foodS5 || '';
+    row[12] = data.foodS6 || '';
+    row[13] = data.misc || '';
+    row[14] = data.amount || '';
+    row[15] = data.billDetails || '';
+    // Add imageName to remarks if present
+    row[16] = (data.remarks || '') + (data.imageName ? ` [img: ${data.imageName}]` : '');
+    row[17] = data.budgetHead || '';
+
+    const values = [row];
 
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range,
+      range: 'Receipts!A:R',
       valueInputOption: 'RAW',
       insertDataOption: 'INSERT_ROWS',
-      resource: valueRange
+      resource: { values }
     });
 
     console.log('Data appended to Google Sheet successfully');
