@@ -16,14 +16,27 @@ export const preprocessImage = (file: File): Promise<Blob> => {
       ctx.drawImage(img, 0, 0);
 
       // Convert to grayscale
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      for (let i = 0; i < imageData.data.length; i += 4) {
-        const avg = (imageData.data[i] + imageData.data[i+1] + imageData.data[i+2]) / 3;
-        imageData.data[i] = avg;
-        imageData.data[i+1] = avg;
-        imageData.data[i+2] = avg;
+      if (ctx) {
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        if (imageData && imageData.data) {
+          const data = imageData.data as Uint8ClampedArray;
+          for (let i = 0; i < data.length; i += 4) {
+            if (
+              typeof data[i] !== 'undefined' &&
+              typeof data[i+1] !== 'undefined' &&
+              typeof data[i+2] !== 'undefined'
+            ) {
+              const avg = Number((data[i] + data[i+1] + data[i+2]) / 3);
+              data[i] = avg;
+              data[i+1] = avg;
+              data[i+2] = avg;
+            }
+          }
+          if (ctx && imageData) {
+            ctx.putImageData(imageData, 0, 0);
+          }
+        }
       }
-      ctx.putImageData(imageData, 0, 0);
 
       canvas.toBlob((blob) => {
         resolve(blob!);
@@ -72,6 +85,7 @@ export const parseOCRText = (text: string): Record<string, string> => {
     let maxStandalonePrice = 0;
     let contextPrice = null;
     let contextPriceValue = 0;
+    let bestDecimal = 0;
 
     // Context keywords
     const contextKeywords = /total|amount|paid|completed|fare|price|grand|final|net|received|charged|payment/i;
@@ -82,7 +96,9 @@ export const parseOCRText = (text: string): Record<string, string> => {
 
     // Step 1: Look for context lines with currency and amount
     for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
+        const rawLine = lines[i];
+        if (typeof rawLine !== 'string') continue;
+        const line = rawLine.trim();
         if (!line) continue;
         // If line has context keyword and a currency amount
         if (contextKeywords.test(line) && currencyPattern.test(line)) {
@@ -143,6 +159,50 @@ export const parseOCRText = (text: string): Record<string, string> => {
     } else if (maxStandalonePrice > 0) {
         foundPrice = maxStandalonePrice.toString();
         console.log('[DEBUG] Found price by standalone:', foundPrice);
+    }
+
+    // Step 4b: Fallback - extract numbers embedded in text (prefer decimals)
+    if (!foundPrice) {
+        for (const line of lines) {
+            // Ignore lines that look like IDs, phone numbers, or times
+            if (/\d{10,}/.test(line) || /\d{1,2}:\d{2}/.test(line)) continue;
+            // Find all numbers with optional decimals
+            const matches = line.match(/([0-9]{2,6}(?:\.[0-9]{1,2})?)/g);
+            if (matches) {
+                for (const m of matches) {
+                    const price = parseFloat(m);
+                    if (price >= 10 && price <= 10000) {
+                        if (m.includes('.') && price > bestDecimal) {
+                            bestDecimal = price;
+                        } else if (!m.includes('.') && price > bestDecimal) {
+                            bestDecimal = price;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Step 4c: Try to fix missing decimal in price stuck to vehicle/model words
+    if (!foundPrice || (foundPrice && !foundPrice.includes('.'))) {
+        let fixedPrice = 0;
+        for (const line of lines) {
+            // Look for a 4-6 digit number stuck to a vehicle/model word (partial match, case-insensitive)
+            const match = line.match(/([0-9]{4,6})(Bajaj|Compact|Wagon|Auto|Maruti|Suzuki|Ride|RE|Com|mpact|Go|Autor|Autoride|Cab|Car|Bike)/i);
+            if (match) {
+                const numStr = match[1];
+                if (typeof numStr === 'string' && numStr.length >= 4) {
+                    const price = parseFloat(numStr.slice(0, -2) + '.' + numStr.slice(-2));
+                    if (price >= 10 && price <= 10000 && price > fixedPrice) {
+                        fixedPrice = price;
+                    }
+                }
+            }
+        }
+        if (fixedPrice > 0) {
+            foundPrice = fixedPrice.toString();
+            console.log('[DEBUG] Fixed price by inserting decimal:', foundPrice);
+        }
     }
 
     // Set the found price in result

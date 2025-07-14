@@ -12,7 +12,8 @@ const {
   appendToSheet, 
   getSheetData, 
   getSpreadsheetId, 
-  saveSpreadsheetId 
+  saveSpreadsheetId, 
+  clearSheetData 
 } = require('./googleSheetsService');
 
 const app = express();
@@ -193,6 +194,19 @@ app.post('/api/sheets/create', async (req, res) => {
   } catch (error) {
     console.error('Error creating Google Sheet:', error);
     res.status(500).json({ message: 'Failed to create Google Sheet' });
+  }
+});
+
+// Endpoint to clear all data rows from the sheet (A13:R1000)
+app.post('/api/sheets/clear', async (req, res) => {
+  try {
+    const spreadsheetId = getSpreadsheetId();
+    if (!spreadsheetId) return res.status(404).json({ message: 'No Google Sheet found.' });
+    await clearSheetData(spreadsheetId);
+    res.json({ message: 'All data cleared.' });
+  } catch (err) {
+    console.error('Error clearing sheet:', err);
+    res.status(500).json({ message: 'Failed to clear data.' });
   }
 });
 

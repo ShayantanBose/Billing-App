@@ -137,13 +137,14 @@ async function appendToSheet(spreadsheetId, data) {
       if (!initialized) return false;
     }
 
-    // Get current number of rows to determine Sl. No.
+    // Get current number of rows to determine Sl. No. (start from row 13)
     const getRowsResp = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: 'Receipts!A3:A', // skip header rows
+      range: 'Receipts!A13:A', // start at row 13
     });
     const currentRows = getRowsResp.data.values ? getRowsResp.data.values.length : 0;
-    const slNo = currentRows + 1; // Sl. No. starts at 1
+    const slNo = currentRows + 1; // Sl. No. starts at 1 for your data rows
+    const targetRow = 13 + currentRows; // Row number in the sheet
 
     // Prepare row: 18 columns (A-R)
     const row = Array(18).fill('');
@@ -169,15 +170,15 @@ async function appendToSheet(spreadsheetId, data) {
 
     const values = [row];
 
-    await sheets.spreadsheets.values.append({
+    // Use update to write to the exact row
+    await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: 'Receipts!A:R',
+      range: `Receipts!A${targetRow}:R${targetRow}`,
       valueInputOption: 'RAW',
-      insertDataOption: 'INSERT_ROWS',
       resource: { values }
     });
 
-    console.log('Data appended to Google Sheet successfully');
+    console.log(`Data written to Google Sheet at row ${targetRow}`);
     return true;
   } catch (error) {
     console.error('Error appending to Google Sheet:', error);
@@ -215,6 +216,30 @@ async function getSheetData(spreadsheetId) {
   }
 }
 
+// Clear all data rows (A13:R1000) in Receipts sheet, keeping headers, and delete all images from disk
+async function clearSheetData(spreadsheetId) {
+  if (!sheets) {
+    const initialized = await initializeGoogleSheets();
+    if (!initialized) return false;
+  }
+  await sheets.spreadsheets.values.clear({
+    spreadsheetId,
+    range: 'Receipts!A13:R1000'
+  });
+  // Delete all files in backend/data/images/
+  const imagesDir = path.join(__dirname, 'data', 'images');
+  if (fs.existsSync(imagesDir)) {
+    const files = fs.readdirSync(imagesDir);
+    for (const file of files) {
+      const filePath = path.join(imagesDir, file);
+      if (fs.lstatSync(filePath).isFile()) {
+        fs.unlinkSync(filePath);
+      }
+    }
+  }
+  return true;
+}
+
 // Get or create spreadsheet ID from config
 function getSpreadsheetId() {
   const configPath = path.join(__dirname, 'sheets-config.json');
@@ -238,5 +263,6 @@ module.exports = {
   appendToSheet,
   getSheetData,
   getSpreadsheetId,
-  saveSpreadsheetId
+  saveSpreadsheetId,
+  clearSheetData
 }; 

@@ -58,6 +58,28 @@ const AdminPanel: React.FC = () => {
     }
   };
 
+  const handleClearData = async () => {
+    if (!window.confirm('Are you sure you want to delete all data? This cannot be undone.')) return;
+    setStatus('Clearing data...');
+    try {
+      const res = await fetch('http://localhost:3001/api/sheets/clear', { method: 'POST' });
+      if (res.ok) {
+        setStatus('All data cleared.');
+        // Refresh data
+        fetch('http://localhost:3001/api/expenses')
+          .then(res => res.json())
+          .then(setExpenses);
+        fetch('http://localhost:3001/api/images')
+          .then(res => res.json())
+          .then(setImages);
+      } else {
+        setStatus('Failed to clear data.');
+      }
+    } catch {
+      setStatus('Failed to clear data.');
+    }
+  };
+
   return (
     <div style={{ maxWidth: 1000, margin: '2rem auto', padding: 24, border: '1px solid #ddd', borderRadius: 8 }}>
       <h2>Admin Panel</h2>
@@ -98,6 +120,22 @@ const AdminPanel: React.FC = () => {
 
       {status && <p style={{ color: status.startsWith('Failed') ? 'red' : 'green' }}>{status}</p>}
       
+      <button
+        onClick={handleClearData}
+        style={{
+          background: '#d32f2f',
+          color: 'white',
+          padding: '8px 16px',
+          border: 'none',
+          borderRadius: 4,
+          cursor: 'pointer',
+          marginBottom: 16,
+          fontWeight: 600
+        }}
+      >
+        Clear All Data
+      </button>
+
       <h3>Uploaded Images</h3>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginBottom: 32 }}>
         {images.map(img => (

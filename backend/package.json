@@ -16,6 +16,8 @@
     "express": "^5.1.0",
     "google-auth-library": "^9.15.1",
     "googleapis": "^128.0.0",
-    "multer": "^2.0.1"
+    "image-size": "^2.0.2",
+    "multer": "^2.0.1",
+    "sharp": "^0.34.3"
   }
 }
