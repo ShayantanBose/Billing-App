@@ -154,3 +154,17 @@ The Google Sheet will have the following columns:
 - Status
 
 Each receipt submission will create a new row in the Google Sheet with all the extracted data and a link to the uploaded image. 
+
+## Additional Setup for Google Drive & Docs Integration
+
+1. Enable the Google Drive API and Google Docs API in your Google Cloud Console:
+   - Go to "APIs & Services" > "Library"
+   - Search for "Google Drive API" and "Google Docs API"
+   - Click on each and press "Enable"
+2. Ensure your OAuth credentials have the following scopes:
+   - `https://www.googleapis.com/auth/drive`
+   - `https://www.googleapis.com/auth/documents`
+3. Set up environment variables in your backend:
+   - `GDRIVE_FOLDER_ID` (optional): The Google Drive folder ID where images will be uploaded. If not set, images go to the root.
+   - `GDOC_ID`: The Google Doc ID where images and data will be inserted.
+4. Make sure your authenticated Google account (or service account) has edit access to the target Google Doc and Drive folder. 

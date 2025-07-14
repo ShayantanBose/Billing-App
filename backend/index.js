@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
@@ -13,7 +14,8 @@ const {
   getSheetData, 
   getSpreadsheetId, 
   saveSpreadsheetId, 
-  clearSheetData 
+  clearSheetData, 
+  initializeGoogleDriveAndDocs // Import new function
 } = require('./googleSheetsService');
 
 const app = express();
@@ -130,7 +132,13 @@ app.post('/api/submit', upload.single('image'), async (req, res) => {
       if (!isNonEmpty) console.warn('Rejected: file is empty');
     }
     if (!isValidExt || !isNonEmpty || !isRealImage) {
-      fs.unlinkSync(imageFile.path);
+      fs.unlink(imageFile.path, (err) => {
+        if (err) {
+          console.error('Failed to delete temp file:', imageFile.path, err);
+        } else {
+          console.log('Temp file deleted:', imageFile.path);
+        }
+      });
       console.warn('Rejected invalid image upload:', imageFile.originalname, 'Size:', stats.size);
       return res.status(400).json({ message: 'Invalid image file. Only real, non-empty PNG/JPEG images are allowed.' });
     }
@@ -139,8 +147,96 @@ app.post('/api/submit', upload.single('image'), async (req, res) => {
     if (!fs.existsSync(imagesDir)) fs.mkdirSync(imagesDir);
     const uniqueName = `receipt_${Date.now()}${ext.slice(ext.lastIndexOf('.'))}`;
     const destPath = path.join(imagesDir, uniqueName);
-    fs.copyFileSync(imageFile.path, destPath);
-    console.log('Saved image:', destPath, 'Size:', stats.size);
+    // Convert to grayscale using sharp and save
+    let sharpImg = sharp(imageFile.path).grayscale();
+    // Save to buffer to sample pixel
+    const grayBuffer = await sharpImg.raw().toBuffer({ resolveWithObject: true });
+    // Sample the top-left pixel (first value in buffer)
+    const firstPixel = grayBuffer.data[0];
+    let processedImg;
+    if (firstPixel < 128) {
+      // Background is black, invert image
+      processedImg = sharp(imageFile.path).grayscale().negate();
+      await processedImg.toFile(destPath);
+      console.log('Inverted grayscale image due to black background:', destPath);
+    } else {
+      // Background is white, just save grayscale
+      await sharpImg.toFile(destPath);
+      console.log('Saved grayscale image (no inversion needed):', destPath);
+    }
+
+    // Upload to Google Drive
+    const { drive } = await initializeGoogleDriveAndDocs();
+    const driveRes = await drive.files.create({
+      requestBody: {
+        name: uniqueName,
+        mimeType: 'image/jpeg',
+        parents: [process.env.GDRIVE_FOLDER_ID] // Optional: set a folder
+      },
+      media: {
+        mimeType: 'image/jpeg',
+        body: fs.createReadStream(destPath)
+      },
+      fields: 'id'
+    });
+    const fileId = driveRes.data.id;
+    // Make file public
+    await drive.permissions.create({
+      fileId,
+      requestBody: { role: 'reader', type: 'anyone' }
+    });
+    // Get public URL
+    const imageUrl = `https://drive.google.com/uc?id=${fileId}`;
+    console.log('Uploaded image to Google Drive:', imageUrl);
+
+    // Insert image into Google Doc (side by side, 2 per row, no text)
+    const { docs } = await initializeGoogleDriveAndDocs();
+    const DOC_ID = process.env.GDOC_ID;
+    const doc = await docs.documents.get({ documentId: DOC_ID });
+    let endIndex = doc.data.body.content[doc.data.body.content.length - 1].endIndex - 1;
+
+    // Find the last paragraph's text to determine if we need a tab or newline
+    let lastPara = doc.data.body.content[doc.data.body.content.length - 2];
+    let lastText = '';
+    if (lastPara && lastPara.paragraph && lastPara.paragraph.elements) {
+      lastText = lastPara.paragraph.elements.map(e => e.textRun ? e.textRun.content : '').join('');
+    }
+    // Count images in the last row (by counting tabs)
+    const imagesInRow = (lastText.match(/\t/g) || []).length + 1;
+    let requests = [
+      {
+        insertInlineImage: {
+          location: { index: endIndex },
+          uri: imageUrl,
+          objectSize: {
+            height: { magnitude: 300, unit: 'PT' },
+            width: { magnitude: 200, unit: 'PT' }
+          }
+        }
+      }
+    ];
+    if (imagesInRow % 2 === 1) {
+      // After first image in row, insert tab
+      requests.push({
+        insertText: {
+          location: { index: endIndex + 1 },
+          text: '\t'
+        }
+      });
+    } else {
+      // After second image in row, insert newline
+      requests.push({
+        insertText: {
+          location: { index: endIndex + 1 },
+          text: '\n'
+        }
+      });
+    }
+    await docs.documents.batchUpdate({
+      documentId: DOC_ID,
+      requestBody: { requests }
+    });
+    console.log('Inserted image into Google Doc.');
     await appendToGoogleSheets({
       date,
       from,
@@ -161,7 +257,9 @@ app.post('/api/submit', upload.single('image'), async (req, res) => {
       budgetHead,
       imageName: uniqueName
     });
-    fs.unlinkSync(imageFile.path);
+    // Remove or comment out the file deletion step after processing the image
+    // fs.unlinkSync(imageFile.path);
+    // or if using async: fs.unlink(imageFile.path, ...);
     res.status(200).json({ message: 'Data appended to Google Sheets and image saved.' });
   } catch (err) {
     console.error(err);

@@ -10,6 +10,10 @@ const TOKEN_PATH = path.join(__dirname, 'token.json');
 let auth = null;
 let sheets = null;
 
+// Add Google Drive and Docs API authentication
+let drive = null;
+let docs = null;
+
 // Initialize Google Sheets API
 async function initializeGoogleSheets() {
   try {
@@ -39,6 +43,22 @@ async function initializeGoogleSheets() {
   } catch (error) {
     console.error('Error initializing Google Sheets:', error);
     return false;
+  }
+}
+
+// Initialize Google Drive and Docs API
+async function initializeGoogleDriveAndDocs() {
+  try {
+    if (!auth) {
+      const initialized = await initializeGoogleSheets();
+      if (!initialized) return false;
+    }
+    if (!drive) drive = google.drive({ version: 'v3', auth });
+    if (!docs) docs = google.docs({ version: 'v1', auth });
+    return { drive, docs };
+  } catch (error) {
+    console.error('Error initializing Google Drive/Docs:', error);
+    return null;
   }
 }
 
@@ -146,7 +166,8 @@ async function appendToSheet(spreadsheetId, data) {
     const slNo = currentRows + 1; // Sl. No. starts at 1 for your data rows
     const targetRow = 13 + currentRows; // Row number in the sheet
 
-    // Prepare row: 18 columns (A-R)
+    // Prepare row: match new sheet format
+    // Columns: Sl. No., Date, From, To, Mode of Travel, Purpose, Travel Expenses, Lodging Expenses, Food, Miscellaneous, Total Amount, Bill Details, ...
     const row = Array(18).fill('');
     row[0] = slNo; // Sl. No.
     row[1] = data.date || '';
@@ -155,15 +176,13 @@ async function appendToSheet(spreadsheetId, data) {
     row[4] = data.modeOfTravel || '';
     row[5] = data.purpose || '';
     row[6] = data.travelExpenses || '';
-    row[7] = data.foodS1 || '';
-    row[8] = data.foodS2 || '';
-    row[9] = data.foodS3 || '';
-    row[10] = data.foodS4 || '';
-    row[11] = data.foodS5 || '';
-    row[12] = data.foodS6 || '';
-    row[13] = data.misc || '';
-    row[14] = data.amount || '';
-    row[15] = data.billDetails || '';
+    row[7] = data.lodgingExpenses || '';
+    // Food as a single cell (combine S1-S6)
+    const foodArr = [data.foodS1, data.foodS2, data.foodS3, data.foodS4, data.foodS5, data.foodS6].filter(Boolean);
+    row[8] = foodArr.join(', ');
+    row[9] = data.misc || '';
+    row[10] = data.amount || '';
+    row[11] = data.billDetails || '';
     // Add imageName to remarks if present
     row[16] = (data.remarks || '') + (data.imageName ? ` [img: ${data.imageName}]` : '');
     row[17] = data.budgetHead || '';
@@ -264,5 +283,6 @@ module.exports = {
   getSheetData,
   getSpreadsheetId,
   saveSpreadsheetId,
-  clearSheetData
+  clearSheetData,
+  initializeGoogleDriveAndDocs // Export new function
 }; 
