@@ -205,6 +205,79 @@ export const parseOCRText = (text: string): Record<string, string> => {
         }
     }
 
+    // Step 4d: Final fallback - find any number with a decimal embedded in any line (even if stuck to text)
+    if (!foundPrice) {
+        let maxDecimal = 0;
+        for (const line of lines) {
+            const matches = line.match(/([0-9]{2,6}\.[0-9]{1,2})/g);
+            if (matches) {
+                for (const m of matches) {
+                    const price = parseFloat(m);
+                    if (price > maxDecimal && price >= 10 && price <= 10000) {
+                        maxDecimal = price;
+                    }
+                }
+            }
+        }
+        if (maxDecimal > 0) {
+            foundPrice = maxDecimal.toString();
+            console.log('[DEBUG] Fallback: found price by decimal-in-text:', foundPrice);
+        }
+    }
+
+    // Step 4e: Fallback - extract price from words like 'RupeesFiftyOnly'
+    if (!foundPrice) {
+        const wordToNumber: Record<string, number> = {
+            'zero': 0, 'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5, 'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
+            'eleven': 11, 'twelve': 12, 'thirteen': 13, 'fourteen': 14, 'fifteen': 15, 'sixteen': 16, 'seventeen': 17, 'eighteen': 18, 'nineteen': 19,
+            'twenty': 20, 'thirty': 30, 'forty': 40, 'fifty': 50, 'sixty': 60, 'seventy': 70, 'eighty': 80, 'ninety': 90,
+            'hundred': 100, 'thousand': 1000
+        };
+        for (const line of lines) {
+            const match = line.match(/Rupees?([A-Za-z]+)Only/i);
+            if (match && match[1]) {
+                // Try to parse the word part (e.g., 'Fifty', 'OneHundredTwenty')
+                let word = match[1].toLowerCase();
+                // Split camel case (e.g., 'FiftyOnly' -> ['Fifty'])
+                word = word.replace(/([a-z])([A-Z])/g, '$1 $2');
+                const words = word.split(/[^a-z]+/i).filter(Boolean);
+                let value = 0;
+                let temp = 0;
+                for (const w of words) {
+                    if (wordToNumber[w]) {
+                        if (wordToNumber[w] === 100 || wordToNumber[w] === 1000) {
+                            temp = (temp || 1) * wordToNumber[w];
+                        } else {
+                            temp += wordToNumber[w];
+                        }
+                    }
+                }
+                value += temp;
+                if (value >= 1 && value <= 10000) {
+                    foundPrice = value.toString();
+                    console.log('[DEBUG] Fallback: found price by words:', foundPrice);
+                    break;
+                }
+            }
+        }
+    }
+
+    // Step 4f: Fallback - handle OCR quirks like 'I50' or 'l50' for '50'
+    if (!foundPrice) {
+        for (const line of lines) {
+            // Accept numbers with a possible leading non-digit (e.g., 'I50', 'l50', 'S50')
+            const match = line.match(/[^0-9]?([0-9]{2,5})/);
+            if (match && match[1]) {
+                const price = parseInt(match[1], 10);
+                if (price >= 10 && price <= 10000) {
+                    foundPrice = price.toString();
+                    console.log('[DEBUG] Fallback: found price by OCR quirk:', foundPrice);
+                    break;
+                }
+            }
+        }
+    }
+
     // Set the found price in result
     if (foundPrice) {
         result['Selected Price'] = `₹ ${foundPrice}`;

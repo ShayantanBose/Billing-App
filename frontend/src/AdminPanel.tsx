@@ -145,39 +145,83 @@ const AdminPanel: React.FC = () => {
       </div>
       
       <h3>Expense Entries</h3>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 32 }}>
-        <thead>
-          <tr>
-            <th style={{ border: '1px solid #ccc', padding: 8, backgroundColor: '#f5f5f5' }}>Date</th>
-            <th style={{ border: '1px solid #ccc', padding: 8, backgroundColor: '#f5f5f5' }}>Type</th>
-            <th style={{ border: '1px solid #ccc', padding: 8, backgroundColor: '#f5f5f5' }}>Amount</th>
-            <th style={{ border: '1px solid #ccc', padding: 8, backgroundColor: '#f5f5f5' }}>Image</th>
-            <th style={{ border: '1px solid #ccc', padding: 8, backgroundColor: '#f5f5f5' }}>Upload Time</th>
-            <th style={{ border: '1px solid #ccc', padding: 8, backgroundColor: '#f5f5f5' }}>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {expenses.map((row, idx) => (
-            <tr key={idx}>
-              <td style={{ border: '1px solid #ccc', padding: 8 }}>{row.date}</td>
-              <td style={{ border: '1px solid #ccc', padding: 8 }}>{row.type}</td>
-              <td style={{ border: '1px solid #ccc', padding: 8 }}>{row.amount}</td>
-              <td style={{ border: '1px solid #ccc', padding: 8 }}>
-                {row.imageUrl ? (
-                  <a href={row.imageUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#1976d2', textDecoration: 'underline' }}>
-                    View Image
-                  </a>
-                ) : '-'}
-              </td>
-              <td style={{ border: '1px solid #ccc', padding: 8 }}>{row.uploadTime || '-'}</td>
-              <td style={{ border: '1px solid #ccc', padding: 8 }}>{row.status || 'Active'}</td>
+      <div style={{ overflowX: 'auto', borderRadius: 8, boxShadow: '0 2px 8px #0001', marginBottom: 32 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
+          <thead>
+            <tr style={{ background: '#222', color: '#fff' }}>
+              <th style={{ padding: 12, fontWeight: 700 }}>Date</th>
+              <th style={{ padding: 12, fontWeight: 700 }}>Type</th>
+              <th style={{ padding: 12, fontWeight: 700 }}>Amount</th>
+              <th style={{ padding: 12, fontWeight: 700 }}>Image</th>
+              <th style={{ padding: 12, fontWeight: 700 }}>Upload Time</th>
+              <th style={{ padding: 12, fontWeight: 700 }}>Status</th>
             </tr>
-          ))}
-          {expenses.length === 0 && (
-            <tr><td colSpan={6} style={{ textAlign: 'center', padding: 16 }}>No entries yet.</td></tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {expenses.map((row, idx) => (
+              <tr
+                key={idx}
+                style={{
+                  background: idx % 2 === 0 ? '#fafbfc' : '#f0f2f5',
+                  transition: 'background 0.2s',
+                  cursor: 'pointer'
+                }}
+                onMouseOver={e => (e.currentTarget.style.background = '#e3f2fd')}
+                onMouseOut={e => (e.currentTarget.style.background = idx % 2 === 0 ? '#fafbfc' : '#f0f2f5')}
+              >
+                <td style={{ padding: 10 }}>
+                  {row.date ? new Date(row.date).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '-'}
+                </td>
+                <td style={{ padding: 10 }}>{row.type}</td>
+                <td style={{ padding: 10, fontWeight: 600, color: '#1976d2' }}>
+                  {row.amount ? (row.amount.startsWith('₹') ? row.amount : `₹ ${row.amount}`) : '-'}
+                </td>
+                <td style={{ padding: 10 }}>
+                  {row.imageUrl ? (
+                    <a href={row.imageUrl} target="_blank" rel="noopener noreferrer">
+                      <img
+                        src={row.imageUrl}
+                        alt="Receipt"
+                        style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 4, border: '1px solid #ccc' }}
+                        title="Click to view full image"
+                      />
+                    </a>
+                  ) : '-'}
+                </td>
+                <td style={{ padding: 10 }}>
+                  {row.uploadTime
+                    ? new Date(row.uploadTime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
+                    : '-'}
+                </td>
+                <td style={{ padding: 10 }}>
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      padding: '4px 12px',
+                      borderRadius: 12,
+                      background: row.status === 'Active' ? '#e8f5e9' : '#ffebee',
+                      color: row.status === 'Active' ? '#388e3c' : '#d32f2f',
+                      fontWeight: 600,
+                      fontSize: 14,
+                      minWidth: 60,
+                      textAlign: 'center'
+                    }}
+                  >
+                    {row.status || 'Active'}
+                  </span>
+                </td>
+              </tr>
+            ))}
+            {expenses.length === 0 && (
+              <tr>
+                <td colSpan={6} style={{ textAlign: 'center', padding: 24, color: '#888' }}>
+                  No entries yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };
