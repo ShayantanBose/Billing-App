@@ -145,16 +145,16 @@ const AdminPanel: React.FC = () => {
       </div>
       
       <h3>Expense Entries</h3>
-      <div style={{ overflowX: 'auto', borderRadius: 8, boxShadow: '0 2px 8px #0001', marginBottom: 32 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
+      <div style={{ overflowX: 'auto', borderRadius: 12, boxShadow: '0 4px 16px #0002', marginBottom: 32, background: '#fff' }}>
+        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, minWidth: 700, borderRadius: 12, overflow: 'hidden', background: '#fff' }}>
           <thead>
-            <tr style={{ background: '#222', color: '#fff' }}>
-              <th style={{ padding: 12, fontWeight: 700 }}>Date</th>
-              <th style={{ padding: 12, fontWeight: 700 }}>Type</th>
-              <th style={{ padding: 12, fontWeight: 700 }}>Amount</th>
-              <th style={{ padding: 12, fontWeight: 700 }}>Image</th>
-              <th style={{ padding: 12, fontWeight: 700 }}>Upload Time</th>
-              <th style={{ padding: 12, fontWeight: 700 }}>Status</th>
+            <tr style={{ background: '#222', color: '#fff', position: 'sticky', top: 0, zIndex: 2 }}>
+              <th style={{ padding: 14, fontWeight: 700, borderTopLeftRadius: 12 }}>Date</th>
+              <th style={{ padding: 14, fontWeight: 700 }}>Type</th>
+              <th style={{ padding: 14, fontWeight: 700 }}>Amount</th>
+              <th style={{ padding: 14, fontWeight: 700 }}>Image</th>
+              <th style={{ padding: 14, fontWeight: 700 }}>Upload Time</th>
+              <th style={{ padding: 14, fontWeight: 700, borderTopRightRadius: 12 }}>Status</th>
             </tr>
           </thead>
           <tbody>
@@ -162,49 +162,55 @@ const AdminPanel: React.FC = () => {
               <tr
                 key={idx}
                 style={{
-                  background: idx % 2 === 0 ? '#fafbfc' : '#f0f2f5',
+                  background: idx % 2 === 0 ? '#f7fafd' : '#eef2f7',
                   transition: 'background 0.2s',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  borderBottom: '1px solid #e0e0e0',
+                  color: '#222', // Ensure all table text is dark
                 }}
                 onMouseOver={e => (e.currentTarget.style.background = '#e3f2fd')}
-                onMouseOut={e => (e.currentTarget.style.background = idx % 2 === 0 ? '#fafbfc' : '#f0f2f5')}
+                onMouseOut={e => (e.currentTarget.style.background = idx % 2 === 0 ? '#f7fafd' : '#eef2f7')}
               >
-                <td style={{ padding: 10 }}>
-                  {row.date ? new Date(row.date).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '-'}
+                <td style={{ padding: 12, minWidth: 120, color: '#222' }}>
+                  {row.date ? (
+                    <span style={{ color: '#222' }}>{new Date(row.date).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                  ) : <span style={{ color: '#888' }}>-</span>}
                 </td>
-                <td style={{ padding: 10 }}>{row.type}</td>
-                <td style={{ padding: 10, fontWeight: 600, color: '#1976d2' }}>
-                  {row.amount ? (row.amount.startsWith('₹') ? row.amount : `₹ ${row.amount}`) : '-'}
+                <td style={{ padding: 12, color: '#222' }}>{row.type ? <span style={{ color: '#222' }}>{row.type}</span> : <span style={{ color: '#888' }}>-</span>}</td>
+                <td style={{ padding: 12, fontWeight: 600, color: row.amount ? '#1976d2' : '#888' }}>
+                  {row.amount ? (row.amount.startsWith('₹') ? row.amount : `₹ ${row.amount}`) : <span style={{ color: '#888' }}>-</span>}
                 </td>
-                <td style={{ padding: 10 }}>
+                <td style={{ padding: 12 }}>
                   {row.imageUrl ? (
                     <a href={row.imageUrl} target="_blank" rel="noopener noreferrer">
                       <img
                         src={row.imageUrl}
                         alt="Receipt"
-                        style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 4, border: '1px solid #ccc' }}
+                        style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 8, border: '1px solid #ccc', boxShadow: '0 2px 8px #0001' }}
                         title="Click to view full image"
                       />
                     </a>
-                  ) : '-'}
+                  ) : <span style={{ color: '#888' }}>-</span>}
                 </td>
-                <td style={{ padding: 10 }}>
+                <td style={{ padding: 12, minWidth: 120, color: '#222' }}>
                   {row.uploadTime
-                    ? new Date(row.uploadTime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })
-                    : '-'}
+                    ? <span style={{ color: '#222' }}>{new Date(row.uploadTime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                    : <span style={{ color: '#888' }}>-</span>}
                 </td>
-                <td style={{ padding: 10 }}>
+                <td style={{ padding: 12 }}>
                   <span
                     style={{
                       display: 'inline-block',
-                      padding: '4px 12px',
-                      borderRadius: 12,
-                      background: row.status === 'Active' ? '#e8f5e9' : '#ffebee',
-                      color: row.status === 'Active' ? '#388e3c' : '#d32f2f',
-                      fontWeight: 600,
-                      fontSize: 14,
-                      minWidth: 60,
-                      textAlign: 'center'
+                      padding: '4px 16px',
+                      borderRadius: 16,
+                      background: row.status === 'Active' ? '#e3fbe3' : '#ffeaea',
+                      color: row.status === 'Active' ? '#1b5e20' : '#b71c1c',
+                      fontWeight: 700,
+                      fontSize: 15,
+                      minWidth: 70,
+                      textAlign: 'center',
+                      boxShadow: row.status === 'Active' ? '0 1px 4px #b2dfdb' : '0 1px 4px #ffcdd2',
+                      letterSpacing: 0.5
                     }}
                   >
                     {row.status || 'Active'}
@@ -214,8 +220,8 @@ const AdminPanel: React.FC = () => {
             ))}
             {expenses.length === 0 && (
               <tr>
-                <td colSpan={6} style={{ textAlign: 'center', padding: 24, color: '#888' }}>
-                  No entries yet.
+                <td colSpan={6} style={{ textAlign: 'center', padding: 36, color: '#888', fontSize: 18, fontWeight: 500, background: '#fff' }}>
+                  <span role="img" aria-label="empty">🗂️</span> No entries yet.
                 </td>
               </tr>
             )}
