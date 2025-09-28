@@ -1,4 +1,157 @@
-# Billing App with Google Sheets Integration
+# NGO Billing Application
+
+A complete bill processing and expense tracking application with OCR capabilities for NGOs.
+
+## Features
+
+- OCR text extraction from receipt images
+- Expense categorization (Food, Travel, Miscellaneous)
+- Google Sheets integration for data storage
+- Admin panel for data management
+- Automatic image processing and storage
+
+## Quick Start (Windows)
+
+### Option 1: Double-click to run
+Simply double-click `launch.bat` to start the application. On first run, it will automatically:
+- Check if Node.js is installed (install if needed)
+- Install all dependencies
+- Build the frontend
+- Start the application
+
+### Option 2: Using PowerShell
+Right-click `start-app.ps1` and select "Run with PowerShell"
+
+### Option 3: Create Windows Installer
+1. Install NSIS (Nullsoft Scriptable Install System)
+2. Right-click `installer.nsi` and select "Compile NSIS Script"
+3. This will create `NGO Billing App-Setup.exe`
+4. Run the installer and use the desktop shortcut
+
+## Manual Setup
+
+If you prefer to set up manually:
+
+1. **Install Node.js** (if not installed):
+   - Download from https://nodejs.org/
+   - Install version 18 or higher
+
+2. **Install dependencies**:
+   ```bash
+   npm install
+   cd backend && npm install
+   cd ../frontend && npm install
+   ```
+
+3. **Build frontend**:
+   ```bash
+   cd frontend
+   npm run build
+   cd ..
+   ```
+
+4. **Copy frontend build**:
+   ```bash
+   # Windows
+   xcopy /s /e /i frontend\\dist backend\\public
+   
+   # Linux/Mac
+   cp -r frontend/dist backend/public
+   ```
+
+5. **Start the application**:
+   ```bash
+   cd backend
+   node index.js
+   ```
+
+6. **Open browser**: Navigate to http://localhost:3001
+
+## Configuration
+
+### Google Sheets Setup
+1. Create a Google Cloud Project
+2. Enable Google Sheets and Drive APIs
+3. Create service account credentials
+4. Download credentials.json and place in backend folder
+5. Create .env file in backend with required variables
+
+### Environment Variables
+Create a `.env` file in the `backend` directory:
+```
+GOOGLE_APPLICATION_CREDENTIALS=./credentials.json
+GDRIVE_FOLDER_ID=your_drive_folder_id
+GDOC_ID=your_google_doc_id
+```
+
+## Usage
+
+1. **Upload Bills**: Select category and upload receipt images
+2. **Process OCR**: Click "Process Image" to extract text
+3. **Review Data**: Verify extracted date and amount
+4. **Submit**: Save data to Google Sheets
+5. **Admin Panel**: Access via the Admin Panel link to view all data
+
+## File Structure
+
+```
+billing-app/
+├── backend/           # Node.js/Express backend
+├── frontend/          # React frontend
+├── launch.bat         # Quick launcher
+├── start-app.bat      # Setup and start script
+├── start-app.ps1      # PowerShell setup script
+├── installer.nsi      # NSIS installer script
+└── README.md          # This file
+```
+
+## Troubleshooting
+
+### Node.js Issues
+- Ensure Node.js 18+ is installed
+- Restart command prompt/PowerShell after Node.js installation
+- Check PATH environment variable includes Node.js
+
+### Port Conflicts
+- If port 3001 is in use, modify the port in `backend/index.js`
+- Update any hardcoded URLs in the frontend
+
+### Google Sheets Errors
+- Verify credentials.json is valid
+- Check API permissions
+- Ensure sheet ID is correct
+
+## Development
+
+To run in development mode:
+```bash
+# Terminal 1 - Backend
+cd backend
+npm run dev
+
+# Terminal 2 - Frontend  
+cd frontend
+npm run dev
+```
+
+## Building for Production
+
+```bash
+# Build frontend
+cd frontend
+npm run build
+
+# Copy to backend
+cp -r dist ../backend/public
+```
+
+## License
+
+This project is licensed under the ISC License.
+
+## Support
+
+For issues and support, please create an issue in the GitHub repository. with Google Sheets Integration
 
 A full-stack billing application that uses OCR (Optical Character Recognition) to extract data from receipt images and stores the information in Google Sheets for collaborative access and management.
 

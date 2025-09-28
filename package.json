@@ -1,0 +1,22 @@
+{
+  "name": "billing-app",
+  "version": "1.0.0",
+  "description": "NGO Billing Application with OCR",
+  "main": "index.js",
+  "scripts": {
+    "install-all": "cd backend && npm install && cd ../frontend && npm install",
+    "build-frontend": "cd frontend && npm run build",
+    "start-backend": "cd backend && node index.js",
+    "start-frontend": "cd frontend && npm run dev",
+    "start": "concurrently \"npm run start-backend\" \"npm run start-frontend\"",
+    "dev": "concurrently \"npm run start-backend\" \"wait-on http://localhost:3001 && npm run start-frontend\"",
+    "build": "npm run build-frontend"
+  },
+  "keywords": ["billing", "ocr", "ngo", "receipt"],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "wait-on": "^8.0.1"
+  }
+}

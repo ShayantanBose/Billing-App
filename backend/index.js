@@ -24,6 +24,9 @@ const port = 3001; // Port for the backend server
 app.use(cors());
 app.use(bodyParser.json());
 
+// Serve static frontend files
+app.use(express.static(path.join(__dirname, 'public')));
+
 const upload = multer({ dest: 'backend/data/' });
 
 // Initialize Google Sheets on startup
@@ -345,6 +348,12 @@ app.get('/api/sheets/status', (req, res) => {
   });
 });
 
+// Catch all handler: send back React's index.html file for SPA routing
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 app.listen(port, () => {
   console.log(`Backend server listening at http://localhost:${port}`);
+  console.log(`Frontend available at http://localhost:${port}`);
 }); 

@@ -5,15 +5,7 @@ import AdminPanel from './AdminPanel';
 import { BrowserRouter as Router, Route, Routes, Link } from 'react-router-dom';
 
 function MainApp() {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [image, setImage] = useState<File | null>(null);
   const [category, setCategory] = useState('Food');
-  const [ocrResult, setOcrResult] = useState<Record<string, string> | null>(null);
-  const [status, setStatus] = useState('');
-  const [date, setDate] = useState('');
-  const [amount, setAmount] = useState('');
-  const [showPreview, setShowPreview] = useState(false);
   const [images, setImages] = useState<File[]>([]);
   const [ocrResults, setOcrResults] = useState<Array<{ result: any, date: string, amount: string, status: string }>>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -21,27 +13,11 @@ function MainApp() {
   const [to, setTo] = useState('');
   const [modeOfTravel, setModeOfTravel] = useState('');
   const [purpose, setPurpose] = useState('');
-  const [travelExpenses, setTravelExpenses] = useState('');
-  const [foodS1, setFoodS1] = useState('');
-  const [foodS2, setFoodS2] = useState('');
-  const [foodS3, setFoodS3] = useState('');
-  const [foodS4, setFoodS4] = useState('');
-  const [foodS5, setFoodS5] = useState('');
-  const [foodS6, setFoodS6] = useState('');
   const [misc, setMisc] = useState('');
-  const [billDetails, setBillDetails] = useState('');
-  const [remarks, setRemarks] = useState('');
-  const [budgetHead, setBudgetHead] = useState('');
-  const [foodType, setFoodType] = useState('S1');
-
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files[0]) {
-      setImage(event.target.files[0]);
-      setOcrResult(null);
-      setDate('');
-      setAmount('');
-    }
-  };
+  const [billDetails] = useState('');
+  const [remarks] = useState('');
+  const [budgetHead] = useState('');
+  const [status, setStatus] = useState('');
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -53,7 +29,10 @@ function MainApp() {
   const handleProcessImage = async () => {
     if (!images[currentIndex]) return;
     const updatedOcrResults = [...ocrResults];
-    updatedOcrResults[currentIndex].status = 'Processing OCR...';
+    const currentResult = updatedOcrResults[currentIndex];
+    if (!currentResult) return;
+    
+    currentResult.status = 'Processing OCR...';
     setOcrResults(updatedOcrResults);
     try {
       const text = await processImageWithOCR(images[currentIndex]);
@@ -66,7 +45,10 @@ function MainApp() {
       };
       setOcrResults([...updatedOcrResults]);
     } catch (error) {
-      updatedOcrResults[currentIndex].status = 'Error processing image. Please try again.';
+      const errorResult = updatedOcrResults[currentIndex];
+      if (errorResult) {
+        errorResult.status = 'Error processing image. Please try again.';
+      }
       setOcrResults([...updatedOcrResults]);
       console.error(error);
     }
@@ -74,24 +56,31 @@ function MainApp() {
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const updatedOcrResults = [...ocrResults];
-    updatedOcrResults[currentIndex].amount = e.target.value;
-    setOcrResults(updatedOcrResults);
+    const currentResult = updatedOcrResults[currentIndex];
+    if (currentResult) {
+      currentResult.amount = e.target.value;
+      setOcrResults(updatedOcrResults);
+    }
   };
 
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const updatedOcrResults = [...ocrResults];
-    updatedOcrResults[currentIndex].date = e.target.value;
-    setOcrResults(updatedOcrResults);
+    const currentResult = updatedOcrResults[currentIndex];
+    if (currentResult) {
+      currentResult.date = e.target.value;
+      setOcrResults(updatedOcrResults);
+    }
   };
 
   const handleSubmit = async () => {
-    if (!images[currentIndex] || !ocrResults[currentIndex].date || !ocrResults[currentIndex].amount) {
+    const currentOcrResult = ocrResults[currentIndex];
+    if (!images[currentIndex] || !currentOcrResult?.date || !currentOcrResult?.amount) {
       setStatus('Please process an image and review the extracted fields.');
       return;
     }
     setStatus('Saving data...');
     let data = {
-      date: ocrResults[currentIndex].date,
+      date: currentOcrResult.date,
       from: '',
       to: '',
       modeOfTravel: '',
@@ -99,22 +88,22 @@ function MainApp() {
       travelExpenses: '',
       foodS1: '', foodS2: '', foodS3: '', foodS4: '', foodS5: '', foodS6: '',
       misc: '',
-      amount: ocrResults[currentIndex].amount,
+      amount: currentOcrResult.amount,
       billDetails,
       remarks,
       budgetHead,
       image: images[currentIndex]
     };
     if (category === 'Food') {
-      data[`food${foodType}`] = ocrResults[currentIndex].amount;
+      data.foodS1 = currentOcrResult.amount;
     } else if (category === 'Travel') {
       data.from = from;
       data.to = to;
       data.modeOfTravel = modeOfTravel;
       data.purpose = purpose;
-      data.travelExpenses = ocrResults[currentIndex].amount;
+      data.travelExpenses = currentOcrResult.amount;
     } else if (category === 'Miscellaneous') {
-      data.misc = ocrResults[currentIndex].amount;
+      data.misc = currentOcrResult.amount;
     }
     const success = await saveData(
       data.date,
@@ -159,36 +148,11 @@ function MainApp() {
       </header>
       <main>
         <div className="form-container">
-          <input
-            type="text"
-            placeholder="Your Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <input
-            type="email"
-            placeholder="Your Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
           <select value={category} onChange={e => setCategory(e.target.value)}>
             <option value="Food">Food</option>
             <option value="Travel">Travel</option>
             <option value="Miscellaneous">Miscellaneous</option>
           </select>
-          {category === 'Food' && (
-            <>
-              <label>Food Type:</label>
-              <select value={foodType} onChange={e => setFoodType(e.target.value)}>
-                <option value="S1">S1</option>
-                <option value="S2">S2</option>
-                <option value="S3">S3</option>
-                <option value="S4">S4</option>
-                <option value="S5">S5</option>
-                <option value="S6">S6</option>
-              </select>
-            </>
-          )}
           {category === 'Travel' && (
             <>
               <input type="text" placeholder="From" value={from} onChange={e => setFrom(e.target.value)} />
@@ -218,10 +182,13 @@ function MainApp() {
               Process Image
             </button>
           )}
-          {ocrResults[currentIndex] && ocrResults[currentIndex].status && (
+          {status && (
+            <p className="status">{status}</p>
+          )}
+          {ocrResults[currentIndex]?.status && (
             <p className="status">{ocrResults[currentIndex].status}</p>
           )}
-          {ocrResults[currentIndex] && ocrResults[currentIndex].result && (
+          {ocrResults[currentIndex]?.result && (
             <div className="results-container" style={{
               marginTop: 24,
               maxWidth: 400,
@@ -246,7 +213,7 @@ function MainApp() {
                   <input
                     id="extracted-amount"
                     type="text"
-                    value={ocrResults[currentIndex].amount}
+                    value={ocrResults[currentIndex]?.amount || ''}
                     onChange={handleAmountChange}
                     placeholder="Amount"
                     style={{
@@ -268,7 +235,7 @@ function MainApp() {
                   <input
                     id="extracted-date"
                     type="text"
-                    value={ocrResults[currentIndex].date}
+                    value={ocrResults[currentIndex]?.date || ''}
                     onChange={handleDateChange}
                     placeholder="Date"
                     style={{
