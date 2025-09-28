@@ -35,20 +35,20 @@ if %errorlevel% neq 0 (
     echo Git is not installed or not in PATH.
     echo.
     echo Downloading and installing Git...
-    
+
     :: Download Git installer
     if not exist "git-installer.exe" (
         echo Downloading Git installer...
         powershell -Command "& {Invoke-WebRequest -Uri 'https://github.com/git-for-windows/git/releases/download/v2.42.0.windows.2/Git-2.42.0.2-64-bit.exe' -OutFile 'git-installer.exe'}"
     )
-    
+
     :: Install Git silently
     echo Installing Git...
     start /wait git-installer.exe /VERYSILENT /NORESTART /NOCANCEL /SP- /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS /COMPONENTS="icons,ext\reg\shellhere,assoc,assoc_sh"
-    
+
     :: Wait for installation to complete
     timeout /t 15 /nobreak >nul
-    
+
     :: Refresh environment variables
     call RefreshEnv.cmd 2>nul || (
         echo Please restart this script after Git installation completes.
@@ -56,7 +56,7 @@ if %errorlevel% neq 0 (
         pause >nul
         exit /b 1
     )
-    
+
     :: Verify installation
     git --version >nul 2>&1
     if %errorlevel% neq 0 (
@@ -66,12 +66,12 @@ if %errorlevel% neq 0 (
         pause >nul
         exit /b 1
     )
-    
+
     :: Clean up installer
     del git-installer.exe 2>nul
 )
 
-echo Git is installed: 
+echo Git is installed:
 git --version
 echo.
 
@@ -119,20 +119,20 @@ if %errorlevel% neq 0 (
     echo Node.js is not installed or not in PATH.
     echo.
     echo Downloading and installing Node.js...
-    
+
     :: Download Node.js installer
     if not exist "nodejs-installer.msi" (
         echo Downloading Node.js installer...
         powershell -Command "& {Invoke-WebRequest -Uri 'https://nodejs.org/dist/v20.11.0/node-v20.11.0-x64.msi' -OutFile 'nodejs-installer.msi'}"
     )
-    
+
     :: Install Node.js silently
     echo Installing Node.js...
     msiexec /i nodejs-installer.msi /quiet /qn /norestart
-    
+
     :: Wait for installation to complete
     timeout /t 30 /nobreak >nul
-    
+
     :: Refresh environment variables
     call RefreshEnv.cmd 2>nul || (
         echo Please restart this script after Node.js installation completes.
@@ -140,7 +140,7 @@ if %errorlevel% neq 0 (
         pause >nul
         exit /b 1
     )
-    
+
     :: Verify installation
     node --version >nul 2>&1
     if %errorlevel% neq 0 (
@@ -152,7 +152,7 @@ if %errorlevel% neq 0 (
     )
 )
 
-echo Node.js is installed: 
+echo Node.js is installed:
 node --version
 npm --version
 echo.
