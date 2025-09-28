@@ -5,11 +5,11 @@
 :: This script does EVERYTHING in one place:
 :: - Installs Git and Node.js if needed
 :: - Downloads the application to the current directory
-:: - Installs all dependencies 
+:: - Installs all dependencies
 :: - Builds the application
 :: - Creates shortcuts
 :: - Runs the application
-:: 
+::
 :: USAGE: Just download this file anywhere and double-click to run
 :: FUTURE CHANGES: Modify the variables in the CONFIGURATION section below
 :: ===========================================================================
@@ -94,7 +94,7 @@ echo.
 echo The following files/directories were found:
 if exist "%BACKEND_DIR%" echo   - Backend directory: YES
 if not exist "%BACKEND_DIR%" echo   - Backend directory: MISSING
-if exist "%FRONTEND_DIR%" echo   - Frontend directory: YES  
+if exist "%FRONTEND_DIR%" echo   - Frontend directory: YES
 if not exist "%FRONTEND_DIR%" echo   - Frontend directory: MISSING
 if exist "package.json" echo   - Package.json: YES
 if not exist "package.json" echo   - Package.json: MISSING
@@ -103,7 +103,7 @@ if not exist ".git" echo   - Git repository: MISSING
 echo.
 echo Choose repair option:
 echo   1. Download missing files (may overwrite existing files)
-echo   2. Clean install (delete everything and start fresh)  
+echo   2. Clean install (delete everything and start fresh)
 echo   3. Move to subfolder and clean install
 echo   4. Exit
 echo.
@@ -203,12 +203,12 @@ if exist "%BACKEND_PUBLIC_DIR%" (
     echo   4. Exit
     echo.
     set /p "CHOICE=Enter choice (1-4): "
-    
+
     if "!CHOICE!"=="1" goto :run_application
     if "!CHOICE!"=="2" goto :update_and_rebuild
     if "!CHOICE!"=="3" goto :full_rebuild
     if "!CHOICE!"=="4" goto :exit_script
-    
+
     echo Invalid choice. Running application by default...
     goto :run_application
 ) else (
@@ -383,15 +383,15 @@ if exist ".git" (
     )
 ) else (
     echo [INFO] Cloning repository...
-    
+
     :: Check if directory has files that would conflict
     set "HAS_FILES=false"
     for %%f in (*) do set "HAS_FILES=true"
     for /d %%d in (*) do set "HAS_FILES=true"
-    
+
     if "!HAS_FILES!"=="true" (
         echo [WARN] Directory is not empty. Using alternative clone method...
-        
+
         :: Create temporary directory for cloning
         set "TEMP_CLONE_DIR=%TEMP%\ngo-billing-clone-%RANDOM%"
         git clone %REPO_URL% "!TEMP_CLONE_DIR!"
@@ -400,7 +400,7 @@ if exist ".git" (
             echo [ERROR] Please check your internet connection and repository URL.
             goto :error_exit
         )
-        
+
         :: Copy files from temp directory to current directory
         echo [INFO] Copying repository files...
         xcopy "!TEMP_CLONE_DIR!\*" . /e /h /k /y >nul 2>&1
@@ -409,7 +409,7 @@ if exist ".git" (
             rmdir /s /q "!TEMP_CLONE_DIR!" 2>nul
             goto :error_exit
         )
-        
+
         :: Clean up temp directory
         rmdir /s /q "!TEMP_CLONE_DIR!" 2>nul
         echo [INFO] Repository files copied successfully.
@@ -567,14 +567,14 @@ if not exist "package.json" (
 
 if not exist "%BACKEND_DIR%\package.json" if not exist "%FRONTEND_DIR%\package.json" (
     echo [WARN] No package.json files found. Downloading repository files first...
-    call :download_application  
+    call :download_application
     if !errorlevel! neq 0 goto :error_exit
 )
 
 :: Clean up node_modules and build artifacts
 echo [INFO] Cleaning up existing installations...
 if exist "node_modules" rmdir /s /q "node_modules"
-if exist "%BACKEND_DIR%\node_modules" rmdir /s /q "%BACKEND_DIR%\node_modules"  
+if exist "%BACKEND_DIR%\node_modules" rmdir /s /q "%BACKEND_DIR%\node_modules"
 if exist "%FRONTEND_DIR%\node_modules" rmdir /s /q "%FRONTEND_DIR%\node_modules"
 if exist "%BACKEND_PUBLIC_DIR%" rmdir /s /q "%BACKEND_PUBLIC_DIR%"
 
@@ -632,7 +632,7 @@ goto :eof
 echo [ERROR] Failed to install NPM dependencies.
 echo [ERROR] This could be due to:
 echo [ERROR]   - Network connectivity issues
-echo [ERROR]   - NPM registry problems  
+echo [ERROR]   - NPM registry problems
 echo [ERROR]   - Insufficient disk space
 echo [ERROR]   - Firewall/antivirus blocking
 echo.
@@ -661,7 +661,7 @@ exit /b 1
 echo.
 echo [INFO] Script finished. You can run this script again anytime to:
 echo [INFO]   - Update the application
-echo [INFO]   - Rebuild if needed  
+echo [INFO]   - Rebuild if needed
 echo [INFO]   - Start the application
 echo.
 pause
