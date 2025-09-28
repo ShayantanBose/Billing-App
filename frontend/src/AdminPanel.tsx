@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 
 interface ExpenseData {
   date: string;
@@ -17,100 +17,145 @@ interface SheetsStatus {
 }
 
 const AdminPanel: React.FC = () => {
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [expenses, setExpenses] = useState<ExpenseData[]>([]);
-  const [sheetsStatus, setSheetsStatus] = useState<SheetsStatus>({ isReady: false, hasSheet: false });
-  const [sheetsUrl, setSheetsUrl] = useState<string>('');
+  const [sheetsStatus, setSheetsStatus] = useState<SheetsStatus>({
+    isReady: false,
+    hasSheet: false,
+  });
+  const [sheetsUrl, setSheetsUrl] = useState<string>("");
 
   useEffect(() => {
-    fetch('http://localhost:3001/api/images')
-      .then(res => res.json())
+    fetch("http://localhost:3001/api/images")
+      .then((res) => res.json())
       .then(setImages);
-    fetch('http://localhost:3001/api/expenses')
-      .then(res => res.json())
+    fetch("http://localhost:3001/api/expenses")
+      .then((res) => res.json())
       .then(setExpenses);
-    fetch('http://localhost:3001/api/sheets/status')
-      .then(res => res.json())
+    fetch("http://localhost:3001/api/sheets/status")
+      .then((res) => res.json())
       .then(setSheetsStatus);
-    fetch('http://localhost:3001/api/sheets/url')
-      .then(res => res.json())
-      .then(data => setSheetsUrl(data.url))
-      .catch(() => setSheetsUrl(''));
+    fetch("http://localhost:3001/api/sheets/url")
+      .then((res) => res.json())
+      .then((data) => setSheetsUrl(data.url))
+      .catch(() => setSheetsUrl(""));
   }, []);
 
   const createNewSheet = async () => {
-    setStatus('');
+    setStatus("");
     try {
-      const response = await fetch('http://localhost:3001/api/sheets/create', {
-        method: 'POST'
+      const response = await fetch("http://localhost:3001/api/sheets/create", {
+        method: "POST",
       });
       const data = await response.json();
       if (response.ok) {
         setSheetsUrl(data.url);
-        setSheetsStatus({ ...sheetsStatus, hasSheet: true, spreadsheetId: data.spreadsheetId });
-        setStatus('Google Sheet created successfully!');
+        setSheetsStatus({
+          ...sheetsStatus,
+          hasSheet: true,
+          spreadsheetId: data.spreadsheetId,
+        });
+        setStatus("Google Sheet created successfully!");
       } else {
-        setStatus('Failed to create Google Sheet: ' + data.message);
+        setStatus("Failed to create Google Sheet: " + data.message);
       }
-    } catch (err) {
-      setStatus('Failed to create Google Sheet.');
+    } catch {
+      setStatus("Failed to create Google Sheet.");
     }
   };
 
   const handleClearData = async () => {
-    if (!window.confirm('Are you sure you want to delete all data? This cannot be undone.')) return;
-    setStatus('Clearing data...');
+    if (
+      !window.confirm(
+        "Are you sure you want to delete all data? This cannot be undone."
+      )
+    )
+      return;
+    setStatus("Clearing data...");
     try {
-      const res = await fetch('http://localhost:3001/api/sheets/clear', { method: 'POST' });
+      const res = await fetch("http://localhost:3001/api/sheets/clear", {
+        method: "POST",
+      });
       if (res.ok) {
-        setStatus('All data cleared.');
+        setStatus("All data cleared.");
         // Refresh data
-        fetch('http://localhost:3001/api/expenses')
-          .then(res => res.json())
+        fetch("http://localhost:3001/api/expenses")
+          .then((res) => res.json())
           .then(setExpenses);
-        fetch('http://localhost:3001/api/images')
-          .then(res => res.json())
+        fetch("http://localhost:3001/api/images")
+          .then((res) => res.json())
           .then(setImages);
       } else {
-        setStatus('Failed to clear data.');
+        setStatus("Failed to clear data.");
       }
     } catch {
-      setStatus('Failed to clear data.');
+      setStatus("Failed to clear data.");
     }
   };
 
   return (
-    <div style={{ maxWidth: 1000, margin: '2rem auto', padding: 24, border: '1px solid #ddd', borderRadius: 8 }}>
+    <div
+      style={{
+        maxWidth: 1000,
+        margin: "2rem auto",
+        padding: 24,
+        border: "1px solid #ddd",
+        borderRadius: 8,
+      }}
+    >
       <h2>Admin Panel</h2>
-      
+
       {/* Google Sheets Status */}
-      <div style={{ marginBottom: 24, padding: 16, backgroundColor: sheetsStatus.isReady ? '#e8f5e8' : '#fff3cd', borderRadius: 8, border: `1px solid ${sheetsStatus.isReady ? '#4caf50' : '#ffc107'}` }}>
-        <h3 style={{ margin: '0 0 12px 0', color: sheetsStatus.isReady ? '#2e7d32' : '#856404' }}>
+      <div
+        style={{
+          marginBottom: 24,
+          padding: 16,
+          backgroundColor: sheetsStatus.isReady ? "#e8f5e8" : "#fff3cd",
+          borderRadius: 8,
+          border: `1px solid ${sheetsStatus.isReady ? "#4caf50" : "#ffc107"}`,
+        }}
+      >
+        <h3
+          style={{
+            margin: "0 0 12px 0",
+            color: sheetsStatus.isReady ? "#2e7d32" : "#856404",
+          }}
+        >
           Google Sheets Status
         </h3>
-        <p style={{ margin: '0 0 8px 0' }}>
-          <strong>API Status:</strong> {sheetsStatus.isReady ? '✅ Connected' : '❌ Not Connected'}
+        <p style={{ margin: "0 0 8px 0" }}>
+          <strong>API Status:</strong>{" "}
+          {sheetsStatus.isReady ? "✅ Connected" : "❌ Not Connected"}
         </p>
-        <p style={{ margin: '0 0 8px 0' }}>
-          <strong>Sheet Status:</strong> {sheetsStatus.hasSheet ? '✅ Created' : '❌ Not Created'}
+        <p style={{ margin: "0 0 8px 0" }}>
+          <strong>Sheet Status:</strong>{" "}
+          {sheetsStatus.hasSheet ? "✅ Created" : "❌ Not Created"}
         </p>
         {sheetsUrl && (
-          <p style={{ margin: '0 0 8px 0' }}>
-            <strong>Sheet URL:</strong> <a href={sheetsUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#1976d2', textDecoration: 'underline' }}>Open Google Sheet</a>
+          <p style={{ margin: "0 0 8px 0" }}>
+            <strong>Sheet URL:</strong>{" "}
+            <a
+              href={sheetsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "#1976d2", textDecoration: "underline" }}
+            >
+              Open Google Sheet
+            </a>
           </p>
         )}
         {!sheetsStatus.hasSheet && sheetsStatus.isReady && (
-          <button 
+          <button
             onClick={createNewSheet}
-            style={{ 
-              padding: '8px 16px', 
-              backgroundColor: '#4caf50', 
-              color: 'white', 
-              border: 'none', 
-              borderRadius: 4, 
-              cursor: 'pointer',
-              marginTop: 8
+            style={{
+              padding: "8px 16px",
+              backgroundColor: "#4caf50",
+              color: "white",
+              border: "none",
+              borderRadius: 4,
+              cursor: "pointer",
+              marginTop: 8,
             }}
           >
             Create New Google Sheet
@@ -118,43 +163,102 @@ const AdminPanel: React.FC = () => {
         )}
       </div>
 
-      {status && <p style={{ color: status.startsWith('Failed') ? 'red' : 'green' }}>{status}</p>}
-      
+      {status && (
+        <p style={{ color: status.startsWith("Failed") ? "red" : "green" }}>
+          {status}
+        </p>
+      )}
+
       <button
         onClick={handleClearData}
         style={{
-          background: '#d32f2f',
-          color: 'white',
-          padding: '8px 16px',
-          border: 'none',
+          background: "#d32f2f",
+          color: "white",
+          padding: "8px 16px",
+          border: "none",
           borderRadius: 4,
-          cursor: 'pointer',
+          cursor: "pointer",
           marginBottom: 16,
-          fontWeight: 600
+          fontWeight: 600,
         }}
       >
         Clear All Data
       </button>
 
       <h3>Uploaded Images</h3>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginBottom: 32 }}>
-        {images.map(img => (
-          <img key={img} src={`http://localhost:3001/images/${img}`} alt={img} style={{ width: 100, height: 100, objectFit: 'cover', border: '1px solid #ccc', borderRadius: 4 }} />
+      <div
+        style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 32 }}
+      >
+        {images.map((img) => (
+          <img
+            key={img}
+            src={`http://localhost:3001/images/${img}`}
+            alt={img}
+            style={{
+              width: 100,
+              height: 100,
+              objectFit: "cover",
+              border: "1px solid #ccc",
+              borderRadius: 4,
+            }}
+          />
         ))}
         {images.length === 0 && <p>No images uploaded yet.</p>}
       </div>
-      
+
       <h3>Expense Entries</h3>
-      <div style={{ overflowX: 'auto', borderRadius: 12, boxShadow: '0 4px 16px #0002', marginBottom: 32, background: '#fff' }}>
-        <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, minWidth: 700, borderRadius: 12, overflow: 'hidden', background: '#fff' }}>
+      <div
+        style={{
+          overflowX: "auto",
+          borderRadius: 12,
+          boxShadow: "0 4px 16px #0002",
+          marginBottom: 32,
+          background: "#fff",
+        }}
+      >
+        <table
+          style={{
+            width: "100%",
+            borderCollapse: "separate",
+            borderSpacing: 0,
+            minWidth: 700,
+            borderRadius: 12,
+            overflow: "hidden",
+            background: "#fff",
+          }}
+        >
           <thead>
-            <tr style={{ background: '#222', color: '#fff', position: 'sticky', top: 0, zIndex: 2 }}>
-              <th style={{ padding: 14, fontWeight: 700, borderTopLeftRadius: 12 }}>Date</th>
+            <tr
+              style={{
+                background: "#222",
+                color: "#fff",
+                position: "sticky",
+                top: 0,
+                zIndex: 2,
+              }}
+            >
+              <th
+                style={{
+                  padding: 14,
+                  fontWeight: 700,
+                  borderTopLeftRadius: 12,
+                }}
+              >
+                Date
+              </th>
               <th style={{ padding: 14, fontWeight: 700 }}>Type</th>
               <th style={{ padding: 14, fontWeight: 700 }}>Amount</th>
               <th style={{ padding: 14, fontWeight: 700 }}>Image</th>
               <th style={{ padding: 14, fontWeight: 700 }}>Upload Time</th>
-              <th style={{ padding: 14, fontWeight: 700, borderTopRightRadius: 12 }}>Status</th>
+              <th
+                style={{
+                  padding: 14,
+                  fontWeight: 700,
+                  borderTopRightRadius: 12,
+                }}
+              >
+                Status
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -162,66 +266,135 @@ const AdminPanel: React.FC = () => {
               <tr
                 key={idx}
                 style={{
-                  background: idx % 2 === 0 ? '#f7fafd' : '#eef2f7',
-                  transition: 'background 0.2s',
-                  cursor: 'pointer',
-                  borderBottom: '1px solid #e0e0e0',
-                  color: '#222', // Ensure all table text is dark
+                  background: idx % 2 === 0 ? "#f7fafd" : "#eef2f7",
+                  transition: "background 0.2s",
+                  cursor: "pointer",
+                  borderBottom: "1px solid #e0e0e0",
+                  color: "#222", // Ensure all table text is dark
                 }}
-                onMouseOver={e => (e.currentTarget.style.background = '#e3f2fd')}
-                onMouseOut={e => (e.currentTarget.style.background = idx % 2 === 0 ? '#f7fafd' : '#eef2f7')}
+                onMouseOver={(e) =>
+                  (e.currentTarget.style.background = "#e3f2fd")
+                }
+                onMouseOut={(e) =>
+                  (e.currentTarget.style.background =
+                    idx % 2 === 0 ? "#f7fafd" : "#eef2f7")
+                }
               >
-                <td style={{ padding: 12, minWidth: 120, color: '#222' }}>
+                <td style={{ padding: 12, minWidth: 120, color: "#222" }}>
                   {row.date ? (
-                    <span style={{ color: '#222' }}>{new Date(row.date).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</span>
-                  ) : <span style={{ color: '#888' }}>-</span>}
+                    <span style={{ color: "#222" }}>
+                      {new Date(row.date).toLocaleString("en-IN", {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}
+                    </span>
+                  ) : (
+                    <span style={{ color: "#888" }}>-</span>
+                  )}
                 </td>
-                <td style={{ padding: 12, color: '#222' }}>{row.type ? <span style={{ color: '#222' }}>{row.type}</span> : <span style={{ color: '#888' }}>-</span>}</td>
-                <td style={{ padding: 12, fontWeight: 600, color: row.amount ? '#1976d2' : '#888' }}>
-                  {row.amount ? (row.amount.startsWith('₹') ? row.amount : `₹ ${row.amount}`) : <span style={{ color: '#888' }}>-</span>}
+                <td style={{ padding: 12, color: "#222" }}>
+                  {row.type ? (
+                    <span style={{ color: "#222" }}>{row.type}</span>
+                  ) : (
+                    <span style={{ color: "#888" }}>-</span>
+                  )}
+                </td>
+                <td
+                  style={{
+                    padding: 12,
+                    fontWeight: 600,
+                    color: row.amount ? "#1976d2" : "#888",
+                  }}
+                >
+                  {row.amount ? (
+                    row.amount.startsWith("₹") ? (
+                      row.amount
+                    ) : (
+                      `₹ ${row.amount}`
+                    )
+                  ) : (
+                    <span style={{ color: "#888" }}>-</span>
+                  )}
                 </td>
                 <td style={{ padding: 12 }}>
                   {row.imageUrl ? (
-                    <a href={row.imageUrl} target="_blank" rel="noopener noreferrer">
+                    <a
+                      href={row.imageUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
                       <img
                         src={row.imageUrl}
                         alt="Receipt"
-                        style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 8, border: '1px solid #ccc', boxShadow: '0 2px 8px #0001' }}
+                        style={{
+                          width: 48,
+                          height: 48,
+                          objectFit: "cover",
+                          borderRadius: 8,
+                          border: "1px solid #ccc",
+                          boxShadow: "0 2px 8px #0001",
+                        }}
                         title="Click to view full image"
                       />
                     </a>
-                  ) : <span style={{ color: '#888' }}>-</span>}
+                  ) : (
+                    <span style={{ color: "#888" }}>-</span>
+                  )}
                 </td>
-                <td style={{ padding: 12, minWidth: 120, color: '#222' }}>
-                  {row.uploadTime
-                    ? <span style={{ color: '#222' }}>{new Date(row.uploadTime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</span>
-                    : <span style={{ color: '#888' }}>-</span>}
+                <td style={{ padding: 12, minWidth: 120, color: "#222" }}>
+                  {row.uploadTime ? (
+                    <span style={{ color: "#222" }}>
+                      {new Date(row.uploadTime).toLocaleString("en-IN", {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}
+                    </span>
+                  ) : (
+                    <span style={{ color: "#888" }}>-</span>
+                  )}
                 </td>
                 <td style={{ padding: 12 }}>
                   <span
                     style={{
-                      display: 'inline-block',
-                      padding: '4px 16px',
+                      display: "inline-block",
+                      padding: "4px 16px",
                       borderRadius: 16,
-                      background: row.status === 'Active' ? '#e3fbe3' : '#ffeaea',
-                      color: row.status === 'Active' ? '#1b5e20' : '#b71c1c',
+                      background:
+                        row.status === "Active" ? "#e3fbe3" : "#ffeaea",
+                      color: row.status === "Active" ? "#1b5e20" : "#b71c1c",
                       fontWeight: 700,
                       fontSize: 15,
                       minWidth: 70,
-                      textAlign: 'center',
-                      boxShadow: row.status === 'Active' ? '0 1px 4px #b2dfdb' : '0 1px 4px #ffcdd2',
-                      letterSpacing: 0.5
+                      textAlign: "center",
+                      boxShadow:
+                        row.status === "Active"
+                          ? "0 1px 4px #b2dfdb"
+                          : "0 1px 4px #ffcdd2",
+                      letterSpacing: 0.5,
                     }}
                   >
-                    {row.status || 'Active'}
+                    {row.status || "Active"}
                   </span>
                 </td>
               </tr>
             ))}
             {expenses.length === 0 && (
               <tr>
-                <td colSpan={6} style={{ textAlign: 'center', padding: 36, color: '#888', fontSize: 18, fontWeight: 500, background: '#fff' }}>
-                  <span role="img" aria-label="empty">🗂️</span> No entries yet.
+                <td
+                  colSpan={6}
+                  style={{
+                    textAlign: "center",
+                    padding: 36,
+                    color: "#888",
+                    fontSize: 18,
+                    fontWeight: 500,
+                    background: "#fff",
+                  }}
+                >
+                  <span role="img" aria-label="empty">
+                    🗂️
+                  </span>{" "}
+                  No entries yet.
                 </td>
               </tr>
             )}
@@ -232,4 +405,4 @@ const AdminPanel: React.FC = () => {
   );
 };
 
-export default AdminPanel; 
+export default AdminPanel;

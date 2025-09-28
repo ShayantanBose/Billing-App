@@ -7,8 +7,113 @@ echo    NGO Billing Application Setup
 echo ============================================
 echo.
 
+@echo off
+title NGO Billing App Setup and Launcher
+color 0a
+
+echo ============================================
+echo    NGO Billing Application Setup
+echo ============================================
+echo.
+
+:: Check if required files exist
+echo [1/7] Checking for required application files...
+if not exist "backend" goto :download_files
+if not exist "frontend" goto :download_files
+if not exist "package.json" goto :download_files
+echo Application files found!
+goto :check_node
+
+:download_files
+echo Application files not found. Downloading from repository...
+echo.
+
+:: Check if Git is installed
+echo [2/7] Checking Git installation...
+git --version >nul 2>&1
+if %errorlevel% neq 0 (
+    echo Git is not installed or not in PATH.
+    echo.
+    echo Downloading and installing Git...
+    
+    :: Download Git installer
+    if not exist "git-installer.exe" (
+        echo Downloading Git installer...
+        powershell -Command "& {Invoke-WebRequest -Uri 'https://github.com/git-for-windows/git/releases/download/v2.42.0.windows.2/Git-2.42.0.2-64-bit.exe' -OutFile 'git-installer.exe'}"
+    )
+    
+    :: Install Git silently
+    echo Installing Git...
+    start /wait git-installer.exe /VERYSILENT /NORESTART /NOCANCEL /SP- /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS /COMPONENTS="icons,ext\reg\shellhere,assoc,assoc_sh"
+    
+    :: Wait for installation to complete
+    timeout /t 15 /nobreak >nul
+    
+    :: Refresh environment variables
+    call RefreshEnv.cmd 2>nul || (
+        echo Please restart this script after Git installation completes.
+        echo Press any key to exit...
+        pause >nul
+        exit /b 1
+    )
+    
+    :: Verify installation
+    git --version >nul 2>&1
+    if %errorlevel% neq 0 (
+        echo Git installation may not be complete.
+        echo Please restart your computer and run this script again.
+        echo Press any key to exit...
+        pause >nul
+        exit /b 1
+    )
+    
+    :: Clean up installer
+    del git-installer.exe 2>nul
+)
+
+echo Git is installed: 
+git --version
+echo.
+
+:: Clone repository
+echo Downloading application files...
+if exist "temp-repo" rmdir /s /q "temp-repo"
+git clone https://github.com/ShayantanBose/Billing-App.git temp-repo
+if %errorlevel% neq 0 (
+    echo Failed to download application files.
+    echo Please check your internet connection and try again.
+    pause
+    exit /b 1
+)
+
+:: Copy files to current directory (excluding .git)
+echo Copying application files...
+for /d %%i in (temp-repo\*) do (
+    if not "%%~ni"==".git" (
+        if not exist "%%~ni" (
+            echo Copying %%~ni...
+            xcopy /s /e /i "%%i" "%%~ni"
+        )
+    )
+)
+
+for %%i in (temp-repo\*) do (
+    if not "%%~xi"=="" (
+        if not exist "%%~ni%%~xi" (
+            echo Copying %%~ni%%~xi...
+            copy "%%i" "%%~ni%%~xi"
+        )
+    )
+)
+
+:: Clean up temp directory
+rmdir /s /q "temp-repo"
+echo Application files downloaded successfully!
+echo.
+
+:check_node
 :: Check if Node.js is installed
-echo [1/5] Checking Node.js installation...
+echo [3/7] Checking Node.js installation...
 node --version >nul 2>&1
 if %errorlevel% neq 0 (
     echo Node.js is not installed or not in PATH.
@@ -53,7 +158,7 @@ npm --version
 echo.
 
 :: Check if npm packages are installed
-echo [2/5] Checking npm dependencies...
+echo [4/7] Checking npm dependencies...
 if not exist "node_modules" (
     echo Installing main dependencies...
     call npm install
@@ -73,7 +178,7 @@ if not exist "frontend/node_modules" (
     cd ..
 )
 
-echo [3/5] Building frontend application...
+echo [5/7] Building frontend application...
 cd frontend
 call npm run build
 if %errorlevel% neq 0 (
@@ -84,12 +189,12 @@ if %errorlevel% neq 0 (
 )
 cd ..
 
-echo [4/5] Copying built frontend to backend...
+echo [6/7] Copying built frontend to backend...
 if exist "backend/public" rmdir /s /q "backend/public"
 xcopy /s /e /i "frontend/dist" "backend/public"
 
 :: Update backend to serve frontend
-echo [5/5] Configuring backend to serve frontend...
+echo [7/7] Configuring backend to serve frontend...
 
 echo.
 echo ============================================

@@ -25,20 +25,20 @@ git --version >nul 2>&1
 if %errorlevel% neq 0 (
     echo Git is not installed. Installing...
     echo.
-    
+
     :: Download Git installer
     if not exist "%TEMP%\git-installer.exe" (
         echo Downloading Git installer...
         powershell -Command "& {Invoke-WebRequest -Uri 'https://github.com/git-for-windows/git/releases/download/v2.42.0.windows.2/Git-2.42.0.2-64-bit.exe' -OutFile '%TEMP%\git-installer.exe'}"
     )
-    
+
     :: Install Git silently
     echo Installing Git...
     start /wait "%TEMP%\git-installer.exe" /VERYSILENT /NORESTART /NOCANCEL /SP- /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS /COMPONENTS="icons,ext\reg\shellhere,assoc,assoc_sh"
-    
+
     :: Wait for installation to complete
     timeout /t 15 /nobreak >nul
-    
+
     :: Verify installation
     git --version >nul 2>&1
     if %errorlevel% neq 0 (
@@ -47,12 +47,12 @@ if %errorlevel% neq 0 (
         pause
         exit /b 1
     )
-    
+
     :: Clean up installer
     del "%TEMP%\git-installer.exe" 2>nul
 )
 
-echo Git is installed: 
+echo Git is installed:
 git --version
 echo.
 
@@ -62,20 +62,20 @@ node --version >nul 2>&1
 if %errorlevel% neq 0 (
     echo Node.js is not installed. Installing...
     echo.
-    
+
     :: Download Node.js installer
     if not exist "%TEMP%\nodejs-installer.msi" (
         echo Downloading Node.js installer...
         powershell -Command "& {Invoke-WebRequest -Uri 'https://nodejs.org/dist/v20.11.0/node-v20.11.0-x64.msi' -OutFile '%TEMP%\nodejs-installer.msi'}"
     )
-    
+
     :: Install Node.js silently
     echo Installing Node.js...
     msiexec /i "%TEMP%\nodejs-installer.msi" /quiet /qn /norestart
-    
+
     :: Wait for installation to complete
     timeout /t 30 /nobreak >nul
-    
+
     :: Verify installation
     node --version >nul 2>&1
     if %errorlevel% neq 0 (
@@ -84,12 +84,12 @@ if %errorlevel% neq 0 (
         pause
         exit /b 1
     )
-    
+
     :: Clean up installer
     del "%TEMP%\nodejs-installer.msi" 2>nul
 )
 
-echo Node.js is installed: 
+echo Node.js is installed:
 node --version
 npm --version
 echo.

@@ -39,22 +39,22 @@ function Test-Git {
 
 function Install-Git {
     Write-Host "Git is not installed. Installing..." -ForegroundColor Yellow
-    
+
     $gitUrl = "https://github.com/git-for-windows/git/releases/download/v2.42.0.windows.2/Git-2.42.0.2-64-bit.exe"
     $installerPath = "$env:TEMP\git-installer.exe"
-    
+
     try {
         Write-Host "Downloading Git installer..." -ForegroundColor Yellow
         Invoke-WebRequest -Uri $gitUrl -OutFile $installerPath -UseBasicParsing
-        
+
         Write-Host "Installing Git..." -ForegroundColor Yellow
         Start-Process -FilePath $installerPath -ArgumentList "/VERYSILENT /NORESTART /NOCANCEL /SP- /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS /COMPONENTS=`"icons,ext\reg\shellhere,assoc,assoc_sh`"" -Wait
-        
+
         # Refresh environment variables
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-        
+
         Start-Sleep -Seconds 5
-        
+
         if (Test-Git) {
             Write-Host "Git installed successfully!" -ForegroundColor Green
             Remove-Item $installerPath -ErrorAction SilentlyContinue
@@ -88,22 +88,22 @@ function Test-NodeJS {
 
 function Install-NodeJS {
     Write-Host "Node.js is not installed. Installing..." -ForegroundColor Yellow
-    
+
     $nodeUrl = "https://nodejs.org/dist/v20.11.0/node-v20.11.0-x64.msi"
     $installerPath = "$env:TEMP\nodejs-installer.msi"
-    
+
     try {
         Write-Host "Downloading Node.js installer..." -ForegroundColor Yellow
         Invoke-WebRequest -Uri $nodeUrl -OutFile $installerPath -UseBasicParsing
-        
+
         Write-Host "Installing Node.js..." -ForegroundColor Yellow
         Start-Process -FilePath "msiexec.exe" -ArgumentList "/i `"$installerPath`" /quiet /qn /norestart" -Wait
-        
+
         # Refresh environment variables
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-        
+
         Start-Sleep -Seconds 10
-        
+
         if (Test-NodeJS) {
             Write-Host "Node.js installed successfully!" -ForegroundColor Green
             Remove-Item $installerPath -ErrorAction SilentlyContinue
@@ -121,20 +121,20 @@ function Install-NodeJS {
 
 function Install-Application {
     Write-Step 4 7 "Downloading application files..."
-    
+
     try {
         # Create install directory
         if (!(Test-Path $InstallPath)) {
             New-Item -ItemType Directory -Path $InstallPath -Force | Out-Null
         }
-        
+
         # Clone repository
         Push-Location $InstallPath
         git clone $RepoUrl .
         if ($LASTEXITCODE -ne 0) {
             throw "Failed to clone repository"
         }
-        
+
         Write-Host "Application files downloaded successfully!" -ForegroundColor Green
         return $true
     }
@@ -149,7 +149,7 @@ function Install-Application {
 
 function Install-Dependencies {
     Write-Step 5 7 "Installing dependencies..."
-    
+
     Push-Location $InstallPath
     try {
         # Install root dependencies
@@ -158,7 +158,7 @@ function Install-Dependencies {
         if ($LASTEXITCODE -ne 0) {
             throw "Failed to install main dependencies"
         }
-        
+
         # Install backend dependencies
         Write-Host "Installing backend dependencies..." -ForegroundColor Yellow
         Push-Location backend
@@ -168,7 +168,7 @@ function Install-Dependencies {
             throw "Failed to install backend dependencies"
         }
         Pop-Location
-        
+
         # Install frontend dependencies
         Write-Host "Installing frontend dependencies..." -ForegroundColor Yellow
         Push-Location frontend
@@ -186,7 +186,7 @@ function Install-Dependencies {
 
 function Build-Application {
     Write-Step 6 7 "Building application..."
-    
+
     Push-Location $InstallPath
     try {
         Push-Location frontend
@@ -196,7 +196,7 @@ function Build-Application {
             throw "Frontend build failed"
         }
         Pop-Location
-        
+
         # Copy built frontend to backend
         if (Test-Path "backend/public") {
             Remove-Item -Recurse -Force "backend/public"
@@ -210,7 +210,7 @@ function Build-Application {
 
 function Create-Shortcuts {
     Write-Step 7 7 "Creating shortcuts..."
-    
+
     try {
         # Create desktop shortcut
         $WshShell = New-Object -comObject WScript.Shell
@@ -221,7 +221,7 @@ function Create-Shortcuts {
         $Shortcut.IconLocation = "$InstallPath\app-icon.ico"
         $Shortcut.Description = "NGO Billing Application"
         $Shortcut.Save()
-        
+
         # Create start menu shortcut
         $StartMenuPath = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs"
         $Shortcut = $WshShell.CreateShortcut("$StartMenuPath\NGO Billing App.lnk")
@@ -231,7 +231,7 @@ function Create-Shortcuts {
         $Shortcut.IconLocation = "$InstallPath\app-icon.ico"
         $Shortcut.Description = "NGO Billing Application"
         $Shortcut.Save()
-        
+
         Write-Host "Shortcuts created successfully!" -ForegroundColor Green
     }
     catch {
@@ -242,34 +242,34 @@ function Create-Shortcuts {
 # Main execution
 try {
     Write-Header
-    
+
     Write-Step 1 7 "Checking Git installation..."
     if (-not (Test-Git)) {
         if (-not (Install-Git)) {
             throw "Git installation failed"
         }
     }
-    
+
     Write-Step 2 7 "Checking Node.js installation..."
     if (-not (Test-NodeJS)) {
         if (-not (Install-NodeJS)) {
             throw "Node.js installation failed"
         }
     }
-    
+
     Write-Step 3 7 "Verifying installations..."
     if (-not (Test-NodeJS) -or -not (Test-Git)) {
         throw "Prerequisites are not properly installed"
     }
-    
+
     if (-not (Install-Application)) {
         throw "Failed to download application files"
     }
-    
+
     Install-Dependencies
     Build-Application
     Create-Shortcuts
-    
+
     Write-Host ""
     Write-Host "============================================" -ForegroundColor Cyan
     Write-Host "    Installation Complete!" -ForegroundColor Yellow
@@ -283,7 +283,7 @@ try {
     Write-Host "  2. Running from Start Menu" -ForegroundColor Cyan
     Write-Host "  3. Running: powershell -File `"$InstallPath\start-app.ps1`"" -ForegroundColor Cyan
     Write-Host ""
-    
+
     $startNow = Read-Host "Would you like to start the application now? (y/n)"
     if ($startNow -eq 'y' -or $startNow -eq 'Y') {
         Push-Location $InstallPath

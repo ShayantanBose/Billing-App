@@ -3,7 +3,8 @@
 
 param(
     [switch]$SkipInstall,
-    [switch]$DevMode
+    [switch]$DevMode,
+    [string]$RepoUrl = "https://github.com/ShayantanBose/Billing-App.git"
 )
 
 # Set console properties
@@ -22,6 +23,107 @@ function Write-Header {
 function Write-Step {
     param($step, $total, $message)
     Write-Host "[$step/$total] $message" -ForegroundColor Green
+}
+
+function Test-Git {
+    try {
+        git --version 2>$null | Out-Null
+        return $true
+    }
+    catch {
+        return $false
+    }
+}
+
+function Install-Git {
+    Write-Host "Git is not installed. Installing..." -ForegroundColor Yellow
+    
+    $gitUrl = "https://github.com/git-for-windows/git/releases/download/v2.42.0.windows.2/Git-2.42.0.2-64-bit.exe"
+    $installerPath = "$env:TEMP\git-installer.exe"
+    
+    try {
+        Write-Host "Downloading Git installer..." -ForegroundColor Yellow
+        Invoke-WebRequest -Uri $gitUrl -OutFile $installerPath -UseBasicParsing
+        
+        Write-Host "Installing Git..." -ForegroundColor Yellow
+        Start-Process -FilePath $installerPath -ArgumentList "/VERYSILENT /NORESTART /NOCANCEL /SP- /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS /COMPONENTS=`"icons,ext\reg\shellhere,assoc,assoc_sh`"" -Wait
+        
+        # Refresh environment variables
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+        
+        # Wait a moment for installation to complete
+        Start-Sleep -Seconds 5
+        
+        # Verify installation
+        if (Test-Git) {
+            Write-Host "Git installed successfully!" -ForegroundColor Green
+            Remove-Item $installerPath -ErrorAction SilentlyContinue
+            return $true
+        } else {
+            Write-Host "Git installation may have failed. Please restart PowerShell and try again." -ForegroundColor Red
+            return $false
+        }
+    }
+    catch {
+        Write-Host "Error installing Git: $($_.Exception.Message)" -ForegroundColor Red
+        return $false
+    }
+}
+
+function Clone-Repository {
+    param($repoUrl, $targetDir = ".")
+    
+    Write-Host "Cloning repository from $repoUrl..." -ForegroundColor Yellow
+    
+    try {
+        # Create temporary directory for cloning
+        $tempDir = Join-Path $env:TEMP "ngo-billing-temp"
+        if (Test-Path $tempDir) {
+            Remove-Item -Recurse -Force $tempDir
+        }
+        
+        # Clone to temp directory
+        git clone $repoUrl $tempDir
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to clone repository"
+        }
+        
+        # Copy files to current directory (excluding .git)
+        $items = Get-ChildItem -Path $tempDir -Exclude ".git"
+        foreach ($item in $items) {
+            $destPath = Join-Path $targetDir $item.Name
+            if (Test-Path $destPath) {
+                Write-Host "Skipping existing: $($item.Name)" -ForegroundColor Yellow
+            } else {
+                Write-Host "Copying: $($item.Name)" -ForegroundColor Green
+                if ($item.PSIsContainer) {
+                    Copy-Item -Recurse $item.FullName $destPath
+                } else {
+                    Copy-Item $item.FullName $destPath
+                }
+            }
+        }
+        
+        # Clean up temp directory
+        Remove-Item -Recurse -Force $tempDir -ErrorAction SilentlyContinue
+        
+        Write-Host "Repository files downloaded successfully!" -ForegroundColor Green
+        return $true
+    }
+    catch {
+        Write-Host "Error cloning repository: $($_.Exception.Message)" -ForegroundColor Red
+        return $false
+    }
+}
+
+function Test-RequiredFiles {
+    $requiredFiles = @("backend", "frontend", "package.json")
+    foreach ($file in $requiredFiles) {
+        if (!(Test-Path $file)) {
+            return $false
+        }
+    }
+    return $true
 }
 
 function Test-NodeJS {
@@ -76,7 +178,7 @@ function Install-NodeJS {
 }
 
 function Install-Dependencies {
-    Write-Step 3 6 "Installing dependencies..."
+    Write-Step 5 8 "Installing dependencies..."
     
     # Install root dependencies
     if (!(Test-Path "node_modules")) {
@@ -113,7 +215,7 @@ function Install-Dependencies {
 }
 
 function Build-Frontend {
-    Write-Step 4 6 "Building frontend application..."
+    Write-Step 6 8 "Building frontend application..."
     
     Push-Location frontend
     npm run build
@@ -125,7 +227,7 @@ function Build-Frontend {
 }
 
 function Copy-FrontendToBuild {
-    Write-Step 5 6 "Copying built frontend to backend..."
+    Write-Step 7 8 "Copying built frontend to backend..."
     
     if (Test-Path "backend/public") {
         Remove-Item -Recurse -Force "backend/public"
@@ -135,7 +237,7 @@ function Copy-FrontendToBuild {
 }
 
 function Start-Application {
-    Write-Step 6 6 "Starting application..."
+    Write-Step 8 8 "Starting application..."
     
     Write-Host ""
     Write-Host "============================================" -ForegroundColor Cyan
@@ -158,14 +260,33 @@ try {
     Write-Header
     
     if (-not $SkipInstall) {
-        Write-Step 1 6 "Checking Node.js installation..."
+        # Check if required files exist, if not download them
+        Write-Step 1 8 "Checking for required application files..."
+        if (-not (Test-RequiredFiles)) {
+            Write-Host "Application files not found. Downloading from repository..." -ForegroundColor Yellow
+            
+            Write-Step 2 8 "Checking Git installation..."
+            if (-not (Test-Git)) {
+                if (-not (Install-Git)) {
+                    throw "Git installation failed"
+                }
+            }
+            
+            if (-not (Clone-Repository $RepoUrl)) {
+                throw "Failed to download application files"
+            }
+        } else {
+            Write-Host "Application files found!" -ForegroundColor Green
+        }
+        
+        Write-Step 3 8 "Checking Node.js installation..."
         if (-not (Test-NodeJS)) {
             if (-not (Install-NodeJS)) {
                 throw "Node.js installation failed"
             }
         }
         
-        Write-Step 2 6 "Verifying Node.js installation..."
+        Write-Step 4 8 "Verifying Node.js installation..."
         if (-not (Test-NodeJS)) {
             throw "Node.js is not properly installed"
         }
