@@ -1,0 +1,7 @@
+{
+  "type": "authorized_user",
+  "client_id": "your-client-id.apps.googleusercontent.com",
+  "client_secret": "your-client-secret",
+  "refresh_token": "your-refresh-token",
+  "expiry_date": 1234567890000
+}
