@@ -13,6 +13,11 @@ $Host.UI.RawUI.BackgroundColor = "DarkBlue"
 $Host.UI.RawUI.ForegroundColor = "White"
 Clear-Host
 
+$ScriptRoot = Split-Path -Parent $PSCommandPath
+if ($ScriptRoot -and (Test-Path $ScriptRoot)) {
+    Set-Location -Path $ScriptRoot
+}
+
 function Write-Header {
     Write-Host "============================================" -ForegroundColor Cyan
     Write-Host "    NGO Billing Application Setup" -ForegroundColor Yellow
@@ -23,6 +28,39 @@ function Write-Header {
 function Write-Step {
     param($step, $total, $message)
     Write-Host "[$step/$total] $message" -ForegroundColor Green
+}
+
+function Test-Administrator {
+    $currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($currentIdentity)
+    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Invoke-AdministratorElevation {
+    param(
+        [string[]]$OriginalArgs,
+        [string]$WorkingDirectory
+    )
+
+    if (Test-Administrator) {
+        return
+    }
+
+    Write-Host "Administrator privileges are required to install prerequisites." -ForegroundColor Yellow
+    Write-Host "Re-launching the setup with elevated permissions..." -ForegroundColor Yellow
+
+    $baseArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath)
+    if ($OriginalArgs) {
+        $baseArgs += $OriginalArgs
+    }
+
+    if (-not $WorkingDirectory) {
+        $WorkingDirectory = $ScriptRoot
+    }
+
+    Start-Process -FilePath "powershell.exe" -ArgumentList $baseArgs -Verb RunAs -WorkingDirectory $WorkingDirectory
+    Write-Host "A new PowerShell window should appear. Please continue in the elevated session." -ForegroundColor Cyan
+    exit
 }
 
 function Test-Git {
@@ -147,32 +185,45 @@ function Install-NodeJS {
 
     $nodeUrl = "https://nodejs.org/dist/v20.11.0/node-v20.11.0-x64.msi"
     $installerPath = "$env:TEMP\nodejs-installer.msi"
+    $logPath = Join-Path $env:TEMP "nodejs-install.log"
 
     try {
         Write-Host "Downloading Node.js installer..." -ForegroundColor Yellow
         Invoke-WebRequest -Uri $nodeUrl -OutFile $installerPath -UseBasicParsing
 
         Write-Host "Installing Node.js..." -ForegroundColor Yellow
-        Start-Process -FilePath "msiexec.exe" -ArgumentList "/i `"$installerPath`" /quiet /qn /norestart" -Wait
+        $msiArguments = "/i `"$installerPath`" /quiet /norestart /l*v `"$logPath`""
+        $installProcess = Start-Process -FilePath "msiexec.exe" -ArgumentList $msiArguments -Wait -PassThru
+
+        if ($installProcess.ExitCode -ne 0) {
+            Write-Host "Node.js installer exited with code $($installProcess.ExitCode)." -ForegroundColor Red
+            Write-Host "Review the installer log for details: $logPath" -ForegroundColor Yellow
+            return $false
+        }
 
         # Refresh environment variables
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 
-        # Wait a moment for installation to complete
-        Start-Sleep -Seconds 10
-
-        # Verify installation
-        if (Test-NodeJS) {
-            Write-Host "Node.js installed successfully!" -ForegroundColor Green
-            Remove-Item $installerPath -ErrorAction SilentlyContinue
-            return $true
-        } else {
-            Write-Host "Node.js installation may have failed. Please restart PowerShell and try again." -ForegroundColor Red
-            return $false
+        # Wait for the new PATH to propagate and node executable to become available
+        for ($attempt = 1; $attempt -le 8; $attempt++) {
+            if (Test-NodeJS) {
+                Write-Host "Node.js installed successfully!" -ForegroundColor Green
+                Remove-Item $installerPath -ErrorAction SilentlyContinue
+                if (Test-Path $logPath) { Remove-Item $logPath -ErrorAction SilentlyContinue }
+                return $true
+            }
+            Start-Sleep -Seconds 3
         }
+
+        Write-Host "Node.js installation completed but the executable was not detected." -ForegroundColor Red
+        Write-Host "Please review $logPath for troubleshooting details and try running the script again." -ForegroundColor Yellow
+        return $false
     }
     catch {
         Write-Host "Error installing Node.js: $($_.Exception.Message)" -ForegroundColor Red
+        if (Test-Path $logPath) {
+            Write-Host "Installer log available at: $logPath" -ForegroundColor Yellow
+        }
         return $false
     }
 }
@@ -254,6 +305,13 @@ function Start-Application {
     node index.js
     Pop-Location
 }
+
+$relaunchArguments = @()
+if ($SkipInstall) { $relaunchArguments += '-SkipInstall' }
+if ($DevMode) { $relaunchArguments += '-DevMode' }
+if ($RepoUrl) { $relaunchArguments += '-RepoUrl'; $relaunchArguments += $RepoUrl }
+
+Invoke-AdministratorElevation -OriginalArgs $relaunchArguments -WorkingDirectory $ScriptRoot
 
 # Main execution
 try {
