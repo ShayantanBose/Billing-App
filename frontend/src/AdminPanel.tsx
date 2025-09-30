@@ -111,10 +111,15 @@ const AdminPanel: React.FC = () => {
       });
       const data = await res.json();
       if (res.ok) {
-        const removed = typeof data.removedImages === "number" ? data.removedImages : 0;
-        setStatus(`Removed ${removed} image${removed === 1 ? "" : "s"} from Google Doc.`);
+        const removed =
+          typeof data.removedImages === "number" ? data.removedImages : 0;
+        setStatus(
+          `Removed ${removed} image${removed === 1 ? "" : "s"} from Google Doc.`
+        );
       } else {
-        setStatus(`Failed to remove images: ${data.message || "Unknown error"}`);
+        setStatus(
+          `Failed to remove images: ${data.message || "Unknown error"}`
+        );
       }
     } catch (error) {
       console.error(error);

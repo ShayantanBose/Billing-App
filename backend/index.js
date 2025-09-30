@@ -175,9 +175,9 @@ app.post("/api/submit", upload.single("image"), async (req, res) => {
       ext.lastIndexOf(".")
     )}`;
     const destPath = path.join(imagesDir, uniqueName);
-  const grayscale = sharp(imageFile.path).grayscale();
-  const grayStats = await grayscale.clone().stats();
-  const brightnessMean = grayStats?.channels?.[0]?.mean ?? 255;
+    const grayscale = sharp(imageFile.path).grayscale();
+    const grayStats = await grayscale.clone().stats();
+    const brightnessMean = grayStats?.channels?.[0]?.mean ?? 255;
     const brightnessLog = brightnessMean.toFixed(2);
     const brightnessThreshold = 150;
 
