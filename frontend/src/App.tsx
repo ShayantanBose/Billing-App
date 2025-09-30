@@ -183,11 +183,31 @@ function MainApp() {
         <Link
           to="/admin"
           style={{
-            color: "white",
-            textDecoration: "underline",
+            color: "#fff",
+            textDecoration: "none",
             position: "absolute",
             right: 20,
             top: 20,
+            background: "#1976d2",
+            padding: "10px 18px",
+            borderRadius: 6,
+            fontWeight: 600,
+            letterSpacing: 0.5,
+            boxShadow: "0 2px 12px rgba(25, 118, 210, 0.35)",
+            border: "1px solid rgba(255,255,255,0.2)",
+            transition: "background 0.2s, transform 0.2s",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "#1565c0";
+            e.currentTarget.style.transform = "translateY(-1px)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "#1976d2";
+            e.currentTarget.style.transform = "translateY(0)";
           }}
         >
           Admin Panel
@@ -397,11 +417,13 @@ function MainApp() {
                 </div>
                 <button
                   type="submit"
+                  disabled={status === "Saving data..."}
                   style={{
                     padding: "12px 0",
                     width: "100%",
                     borderRadius: 6,
-                    background: "#1976d2",
+                    background:
+                      status === "Saving data..." ? "#1565c0" : "#1976d2",
                     color: "#fff",
                     border: "none",
                     fontWeight: 700,
@@ -410,15 +432,37 @@ function MainApp() {
                     marginTop: 8,
                     cursor: "pointer",
                     transition: "background 0.2s",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
                   }}
                   onMouseOver={(e) =>
-                    (e.currentTarget.style.background = "#1565c0")
+                    (e.currentTarget.style.background =
+                      status === "Saving data..." ? "#1565c0" : "#1565c0")
                   }
                   onMouseOut={(e) =>
                     (e.currentTarget.style.background = "#1976d2")
                   }
                 >
-                  Submit Data
+                  {status === "Saving data..." ? (
+                    <>
+                      <span
+                        className="loading-spinner"
+                        style={{
+                          width: 14,
+                          height: 14,
+                          borderRadius: "50%",
+                          border: "2px solid rgba(255,255,255,0.4)",
+                          borderTopColor: "#fff",
+                          animation: "spin 0.8s linear infinite",
+                        }}
+                      />
+                      Submitting...
+                    </>
+                  ) : (
+                    "Submit Data"
+                  )}
                 </button>
               </form>
             </div>

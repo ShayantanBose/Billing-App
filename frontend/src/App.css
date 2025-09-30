@@ -70,7 +70,9 @@ main {
   border-radius: 8px;
 }
 
-input, select, button {
+input,
+select,
+button {
   padding: 0.8rem;
   font-size: 1rem;
   border-radius: 4px;
@@ -94,6 +96,15 @@ button:disabled {
 .status {
   font-weight: bold;
   color: #282c34;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .results-container {
