@@ -15,7 +15,8 @@ const {
   getSpreadsheetId,
   saveSpreadsheetId,
   clearSheetData,
-  initializeGoogleDriveAndDocs, // Import new function
+  initializeGoogleDriveAndDocs,
+  clearDocImages,
 } = require("./googleSheetsService");
 
 const app = express();
@@ -174,28 +175,26 @@ app.post("/api/submit", upload.single("image"), async (req, res) => {
       ext.lastIndexOf(".")
     )}`;
     const destPath = path.join(imagesDir, uniqueName);
-    // Convert to grayscale using sharp and save
-    let sharpImg = sharp(imageFile.path).grayscale();
-    // Save to buffer to sample pixel
-    const grayBuffer = await sharpImg
-      .raw()
-      .toBuffer({ resolveWithObject: true });
-    // Sample the top-left pixel (first value in buffer)
-    const firstPixel = grayBuffer.data[0];
+  const grayscale = sharp(imageFile.path).grayscale();
+  const grayStats = await grayscale.clone().stats();
+  const brightnessMean = grayStats?.channels?.[0]?.mean ?? 255;
+    const brightnessLog = brightnessMean.toFixed(2);
+    const brightnessThreshold = 150;
+
     let processedImg;
-    if (firstPixel < 128) {
-      // Background is black, invert image
-      processedImg = sharp(imageFile.path).grayscale().negate();
-      await processedImg.toFile(destPath);
+    if (brightnessMean < brightnessThreshold) {
+      processedImg = grayscale.clone().negate().normalize();
       console.log(
-        "Inverted grayscale image due to black background:",
-        destPath
+        `Detected dark image (mean brightness ${brightnessLog}). Inverting to create white-dominant output: ${destPath}`
       );
     } else {
-      // Background is white, just save grayscale
-      await sharpImg.toFile(destPath);
-      console.log("Saved grayscale image (no inversion needed):", destPath);
+      processedImg = grayscale.clone().normalize();
+      console.log(
+        `Detected light image (mean brightness ${brightnessLog}). Keeping light tones: ${destPath}`
+      );
     }
+
+    await processedImg.toFile(destPath);
 
     // Upload to Google Drive
     const { drive } = await initializeGoogleDriveAndDocs();
@@ -349,6 +348,30 @@ app.post("/api/sheets/clear", async (req, res) => {
   } catch (err) {
     console.error("Error clearing sheet:", err);
     res.status(500).json({ message: "Failed to clear data." });
+  }
+});
+
+// Endpoint to remove all inline images from the configured Google Doc
+app.post("/api/docs/images/clear", async (req, res) => {
+  try {
+    const DOC_ID = process.env.GDOC_ID;
+    if (!DOC_ID) {
+      return res
+        .status(400)
+        .json({ message: "GDOC_ID is not configured in environment." });
+    }
+
+    const result = await clearDocImages(DOC_ID);
+    res.json({
+      message: "Google Doc images cleared successfully.",
+      removedImages: result.removed,
+    });
+  } catch (error) {
+    console.error("Error clearing Google Doc images:", error);
+    res.status(500).json({
+      message: error?.message || "Failed to clear Google Doc images.",
+      details: error?.response?.data || null,
+    });
   }
 });
 

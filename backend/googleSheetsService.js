@@ -62,6 +62,81 @@ async function initializeGoogleDriveAndDocs() {
   }
 }
 
+// Remove all inline images (and trailing whitespace) from a Google Doc
+async function clearDocImages(documentId) {
+  try {
+    if (!documentId) {
+      throw new Error('Missing Google Doc ID (GDOC_ID).');
+    }
+
+    const services = await initializeGoogleDriveAndDocs();
+    if (!services || !services.docs) {
+      throw new Error('Failed to initialize Google Docs API.');
+    }
+
+    const { docs } = services;
+    const doc = await docs.documents.get({ documentId });
+    const content = doc?.data?.body?.content || [];
+
+    const rangesToDelete = [];
+
+    content.forEach((struct) => {
+      const elements = struct?.paragraph?.elements || [];
+      elements.forEach((element, idx) => {
+        if (element.inlineObjectElement && element.startIndex !== undefined && element.endIndex !== undefined) {
+          let startIndex = element.startIndex;
+          let endIndex = element.endIndex;
+
+          const nextEl = elements[idx + 1];
+          if (
+            nextEl &&
+            nextEl.textRun &&
+            typeof nextEl.startIndex === 'number' &&
+            typeof nextEl.endIndex === 'number'
+          ) {
+            const content = nextEl.textRun.content || '';
+            if (content.trim() === '') {
+              const sliceIndex = content.lastIndexOf('\n');
+              if (sliceIndex > -1) {
+                endIndex = nextEl.startIndex + sliceIndex;
+              } else {
+                endIndex = nextEl.startIndex;
+              }
+            }
+          }
+
+          if (endIndex <= startIndex) {
+            endIndex = startIndex + 1;
+          }
+
+          rangesToDelete.push({ startIndex, endIndex });
+        }
+      });
+    });
+
+    if (!rangesToDelete.length) {
+      return { removed: 0 };
+    }
+
+    // Delete from bottom to top to avoid index shift
+    rangesToDelete.sort((a, b) => b.startIndex - a.startIndex);
+
+    const requests = rangesToDelete.map((range) => ({
+      deleteContentRange: { range }
+    }));
+
+    await docs.documents.batchUpdate({
+      documentId,
+      requestBody: { requests }
+    });
+
+    return { removed: rangesToDelete.length };
+  } catch (error) {
+    console.error('Error clearing images from Google Doc:', error);
+    throw error;
+  }
+}
+
 // Create a new Google Sheet
 async function createSheet(title = 'Receipts Database') {
   try {
@@ -284,5 +359,6 @@ module.exports = {
   getSpreadsheetId,
   saveSpreadsheetId,
   clearSheetData,
-  initializeGoogleDriveAndDocs // Export new function
+  initializeGoogleDriveAndDocs,
+  clearDocImages
 }; 

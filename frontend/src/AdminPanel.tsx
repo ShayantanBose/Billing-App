@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 
 interface ExpenseData {
   date: string;
@@ -94,6 +95,33 @@ const AdminPanel: React.FC = () => {
     }
   };
 
+  const handleClearDocImages = async () => {
+    if (
+      !window.confirm(
+        "Remove all receipt images from the linked Google Doc? This cannot be undone."
+      )
+    ) {
+      return;
+    }
+
+    setStatus("Removing images from Google Doc...");
+    try {
+      const res = await fetch("http://localhost:3001/api/docs/images/clear", {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const removed = typeof data.removedImages === "number" ? data.removedImages : 0;
+        setStatus(`Removed ${removed} image${removed === 1 ? "" : "s"} from Google Doc.`);
+      } else {
+        setStatus(`Failed to remove images: ${data.message || "Unknown error"}`);
+      }
+    } catch (error) {
+      console.error(error);
+      setStatus("Failed to remove images from Google Doc.");
+    }
+  };
+
   return (
     <div
       style={{
@@ -102,9 +130,43 @@ const AdminPanel: React.FC = () => {
         padding: 24,
         border: "1px solid #ddd",
         borderRadius: 8,
+        position: "relative",
       }}
     >
       <h2>Admin Panel</h2>
+
+      <Link
+        to="/"
+        style={{
+          color: "#fff",
+          textDecoration: "none",
+          position: "absolute",
+          right: 24,
+          top: 24,
+          background: "#1976d2",
+          padding: "10px 18px",
+          borderRadius: 6,
+          fontWeight: 600,
+          letterSpacing: 0.5,
+          boxShadow: "0 2px 12px rgba(25, 118, 210, 0.35)",
+          border: "1px solid rgba(0,0,0,0.05)",
+          transition: "background 0.2s, transform 0.2s",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = "#1565c0";
+          e.currentTarget.style.transform = "translateY(-1px)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = "#1976d2";
+          e.currentTarget.style.transform = "translateY(0)";
+        }}
+      >
+        Back to Main App
+      </Link>
 
       {/* Google Sheets Status */}
       <div
@@ -183,6 +245,24 @@ const AdminPanel: React.FC = () => {
         }}
       >
         Clear All Data
+      </button>
+
+      <button
+        onClick={handleClearDocImages}
+        style={{
+          background: "#1565c0",
+          color: "white",
+          padding: "8px 16px",
+          border: "none",
+          borderRadius: 4,
+          cursor: "pointer",
+          marginBottom: 24,
+          marginLeft: 12,
+          fontWeight: 600,
+          boxShadow: "0 2px 10px rgba(21,101,192,0.3)",
+        }}
+      >
+        Remove Google Doc Images
       </button>
 
       <h3>Uploaded Images</h3>
