@@ -27,7 +27,17 @@ app.use(bodyParser.json());
 // Serve static frontend files
 app.use(express.static(path.join(__dirname, "public")));
 
-const upload = multer({ dest: "backend/data/" });
+const dataDir = path.join(__dirname, "data");
+const imagesDir = path.join(dataDir, "images");
+const uploadsDir = path.join(dataDir, "uploads");
+
+[imagesDir, uploadsDir].forEach((dir) => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+});
+
+const upload = multer({ dest: uploadsDir });
 
 // Initialize Google Sheets on startup
 let isGoogleSheetsReady = false;
@@ -69,9 +79,8 @@ async function appendToGoogleSheets(data) {
 
 // Helper: Store image in local directory
 async function storeImage(imagePath) {
-  const imagesDir = path.join(__dirname, "data", "images");
   if (!fs.existsSync(imagesDir)) {
-    fs.mkdirSync(imagesDir);
+    fs.mkdirSync(imagesDir, { recursive: true });
   }
   // Copy image to imagesDir with unique name
   const imageName = `receipt_${Date.now()}${path.extname(imagePath)}`;
@@ -154,16 +163,13 @@ app.post("/api/submit", upload.single("image"), async (req, res) => {
         "Size:",
         stats.size
       );
-      return res
-        .status(400)
-        .json({
-          message:
-            "Invalid image file. Only real, non-empty PNG/JPEG images are allowed.",
-        });
+      return res.status(400).json({
+        message:
+          "Invalid image file. Only real, non-empty PNG/JPEG images are allowed.",
+      });
     }
     // Copy to images folder with unique name
-    const imagesDir = path.join(__dirname, "data", "images");
-    if (!fs.existsSync(imagesDir)) fs.mkdirSync(imagesDir);
+    if (!fs.existsSync(imagesDir)) fs.mkdirSync(imagesDir, { recursive: true });
     const uniqueName = `receipt_${Date.now()}${ext.slice(
       ext.lastIndexOf(".")
     )}`;
@@ -305,11 +311,9 @@ app.get("/api/sheets/url", (req, res) => {
     const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
     res.json({ url, spreadsheetId });
   } else {
-    res
-      .status(404)
-      .json({
-        message: "Google Sheet not found. Please submit some data first.",
-      });
+    res.status(404).json({
+      message: "Google Sheet not found. Please submit some data first.",
+    });
   }
 });
 
@@ -353,7 +357,6 @@ app.use("/images", express.static(path.join(__dirname, "data", "images")));
 
 // Endpoint to list image filenames
 app.get("/api/images", (req, res) => {
-  const imagesDir = path.join(__dirname, "data", "images");
   if (!fs.existsSync(imagesDir)) return res.json([]);
   const files = fs
     .readdirSync(imagesDir)
