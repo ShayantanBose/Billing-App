@@ -251,7 +251,7 @@ async function updateHeaders(spreadsheetId) {
   }
 }
 
-// Append data to Google Sheet
+// Append data to Google Sheet starting from row 11
 async function appendToSheet(spreadsheetId, data) {
   try {
     if (!sheets) {
@@ -259,29 +259,56 @@ async function appendToSheet(spreadsheetId, data) {
       if (!initialized) return false;
     }
 
-    // Get current number of rows to determine Sl. No. (start from row 13)
-    const getRowsResp = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: "Receipts!A13:A", // start at row 13
-    });
-    const currentRows = getRowsResp.data.values
-      ? getRowsResp.data.values.length
-      : 0;
-    const slNo = currentRows + 1; // Sl. No. starts at 1 for your data rows
-    const targetRow = 13 + currentRows; // Row number in the sheet
+    // Find the first empty row in the range 11-20
+    let targetRow = 11;
+    let slNo = 1;
 
-    // Prepare row: match new sheet format
-    // Columns: Sl. No., Date, From, To, Mode of Travel, Purpose, Travel Expenses, Lodging Expenses, Food, Miscellaneous, Total Amount, Bill Details, ...
-    const row = Array(18).fill("");
-    row[0] = slNo; // Sl. No.
-    row[1] = data.date || "";
-    row[2] = data.from || "";
-    row[3] = data.to || "";
-    row[4] = data.modeOfTravel || "";
-    row[5] = data.purpose || "";
-    row[6] = data.travelExpenses || "";
-    row[7] = data.lodgingExpenses || "";
-    // Food as a single cell (combine S1-S6)
+    // Check each row from 11 to 20 to find the first empty one
+    for (let row = 11; row <= 20; row++) {
+      const checkResp = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `Receipts!A${row}`,
+      });
+
+      const cellValue = checkResp.data.values?.[0]?.[0];
+
+      if (!cellValue || cellValue === "") {
+        // Found empty row
+        targetRow = row;
+        slNo = row - 10; // Sl. No. = 1 for row 11, 2 for row 12, etc.
+        break;
+      }
+
+      if (row === 20) {
+        throw new Error(
+          "Data range is full (rows 11-20). Please clear data before adding more entries."
+        );
+      }
+    }
+
+    console.log(`Writing to row ${targetRow} with Sl. No. ${slNo}`);
+
+    // Prepare row according to your specified mapping:
+    // A11: Sl. No.
+    // B11: Date
+    // C11: Station (From)
+    // D11: Station (To)
+    // E11: Mode of Travel
+    // F11: Purpose and other particulars
+    // G11: Travel Expense
+    // H11: Lodging Expense
+    // I11: Food
+    // J11: Total Amount
+    const row = Array(10).fill("");
+    row[0] = slNo; // A: Sl. No.
+    row[1] = data.date || ""; // B: Date
+    row[2] = data.from || ""; // C: Station (From)
+    row[3] = data.to || ""; // D: Station (To)
+    row[4] = data.modeOfTravel || ""; // E: Mode of Travel
+    row[5] = data.purpose || ""; // F: Purpose and other particulars
+    row[6] = data.travelExpenses || ""; // G: Travel Expense
+    row[7] = data.lodgingExpenses || ""; // H: Lodging Expense
+    // I: Food - combine S1-S6
     const foodArr = [
       data.foodS1,
       data.foodS2,
@@ -290,22 +317,15 @@ async function appendToSheet(spreadsheetId, data) {
       data.foodS5,
       data.foodS6,
     ].filter(Boolean);
-    row[8] = foodArr.join(", ");
-    row[9] = data.misc || "";
-    row[10] = data.amount || "";
-    row[11] = data.billDetails || "";
-    // Add imageName to remarks if present
-    row[16] =
-      (data.remarks || "") +
-      (data.imageName ? ` [img: ${data.imageName}]` : "");
-    row[17] = data.budgetHead || "";
+    row[8] = foodArr.join(", "); // I: Food
+    row[9] = data.amount || ""; // J: Total Amount
 
     const values = [row];
 
     // Use update to write to the exact row
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: `Receipts!A${targetRow}:R${targetRow}`,
+      range: `Receipts!A${targetRow}:J${targetRow}`,
       valueInputOption: "RAW",
       resource: { values },
     });
@@ -348,27 +368,39 @@ async function getSheetData(spreadsheetId) {
   }
 }
 
-// Clear all data rows (A13:R1000) in Receipts sheet, keeping headers, and delete all images from disk
+// Clear only website-uploaded data rows (A11:J20) in Receipts sheet, preserving headers/styling (rows 1-10) and data after row 20
 async function clearSheetData(spreadsheetId) {
   if (!sheets) {
     const initialized = await initializeGoogleSheets();
     if (!initialized) return false;
   }
+
+  console.log(
+    "Clearing data rows A11:J20 (preserving rows 1-10 with headers/styling and rows 21+ with additional data)..."
+  );
+
   await sheets.spreadsheets.values.clear({
     spreadsheetId,
-    range: "Receipts!A13:R1000",
+    range: "Receipts!A11:K18",
   });
+
+  console.log("Sheet data cleared successfully.");
+
   // Delete all files in backend/data/images/
   const imagesDir = path.join(__dirname, "data", "images");
   if (fs.existsSync(imagesDir)) {
     const files = fs.readdirSync(imagesDir);
+    let deletedCount = 0;
     for (const file of files) {
       const filePath = path.join(imagesDir, file);
       if (fs.lstatSync(filePath).isFile()) {
         fs.unlinkSync(filePath);
+        deletedCount++;
       }
     }
+    console.log(`Deleted ${deletedCount} image file(s) from disk.`);
   }
+
   return true;
 }
 
