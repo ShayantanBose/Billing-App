@@ -331,9 +331,84 @@ async function appendToSheet(spreadsheetId, data) {
     });
 
     console.log(`Data written to Google Sheet at row ${targetRow}`);
+
+    // Update totals in row 19 for columns G, H, I, J
+    await updateTotals(spreadsheetId);
+
     return true;
   } catch (error) {
     console.error("Error appending to Google Sheet:", error);
+    return false;
+  }
+}
+
+// Update totals in row 19 for columns G, H, I, J (sum of rows 11-18)
+async function updateTotals(spreadsheetId) {
+  try {
+    if (!sheets) {
+      const initialized = await initializeGoogleSheets();
+      if (!initialized) return false;
+    }
+
+    // Read data from rows 11-18 for columns G, H, I, J
+    const dataResp = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: "Receipts!G11:J18",
+    });
+
+    const values = dataResp.data.values || [];
+
+    // Calculate totals for each column
+    let totalG = 0; // Travel Expense
+    let totalH = 0; // Lodging Expense
+    let totalI = 0; // Food (will try to parse if numeric)
+    let totalJ = 0; // Total Amount
+
+    values.forEach((row) => {
+      // Parse and sum column G (Travel Expense)
+      const valG = parseFloat(String(row[0] || "").replace(/[^0-9.-]/g, ""));
+      if (!isNaN(valG)) totalG += valG;
+
+      // Parse and sum column H (Lodging Expense)
+      const valH = parseFloat(String(row[1] || "").replace(/[^0-9.-]/g, ""));
+      if (!isNaN(valH)) totalH += valH;
+
+      // Parse and sum column I (Food) - skip if it has commas (combined S1-S6)
+      const foodVal = String(row[2] || "");
+      if (!foodVal.includes(",")) {
+        const valI = parseFloat(foodVal.replace(/[^0-9.-]/g, ""));
+        if (!isNaN(valI)) totalI += valI;
+      }
+
+      // Parse and sum column J (Total Amount)
+      const valJ = parseFloat(String(row[3] || "").replace(/[^0-9.-]/g, ""));
+      if (!isNaN(valJ)) totalJ += valJ;
+    });
+
+    // Write totals to row 19
+    const totalsRow = [
+      totalG.toFixed(2),
+      totalH.toFixed(2),
+      totalI.toFixed(2),
+      totalJ.toFixed(2),
+    ];
+
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: "Receipts!G19:J19",
+      valueInputOption: "RAW",
+      resource: { values: [totalsRow] },
+    });
+
+    console.log(
+      `Totals updated in row 19: G=${totalG.toFixed(2)}, H=${totalH.toFixed(
+        2
+      )}, I=${totalI.toFixed(2)}, J=${totalJ.toFixed(2)}`
+    );
+
+    return true;
+  } catch (error) {
+    console.error("Error updating totals:", error);
     return false;
   }
 }
@@ -385,6 +460,15 @@ async function clearSheetData(spreadsheetId) {
   });
 
   console.log("Sheet data cleared successfully.");
+
+  // Clear totals in row 19
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: "Receipts!G19:J19",
+    valueInputOption: "RAW",
+    resource: { values: [["0.00", "0.00", "0.00", "0.00"]] },
+  });
+  console.log("Totals in row 19 reset to 0.00");
 
   // Delete all files in backend/data/images/
   const imagesDir = path.join(__dirname, "data", "images");
