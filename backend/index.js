@@ -177,20 +177,77 @@ app.post("/api/submit", upload.single("image"), async (req, res) => {
     const destPath = path.join(imagesDir, uniqueName);
     const grayscale = sharp(imageFile.path).grayscale();
     const grayStats = await grayscale.clone().stats();
-    const brightnessMean = grayStats?.channels?.[0]?.mean ?? 255;
+    const lumaChannel = grayStats?.channels?.[0];
+    const brightnessMean = lumaChannel?.mean ?? 255;
+    const totalPixels = lumaChannel?.count ?? 1;
+    const histogram = Array.isArray(lumaChannel?.histogram)
+      ? lumaChannel.histogram
+      : [];
+
+    // Count pixels that are light/white (>180 intensity for grayscale receipts)
+    const whitePixelCount = histogram
+      .slice(180)
+      .reduce((sum, val) => sum + val, 0);
+    const whiteRatio = totalPixels > 0 ? whitePixelCount / totalPixels : 0;
+
+    // Calculate median and 85th percentile intensity
+    const medianTarget = totalPixels * 0.5;
+    const quantileTarget = totalPixels * 0.85;
+    let median = 0;
+    let quantile85 = 0;
+    if (histogram.length) {
+      let running = 0;
+      for (let i = 0; i < histogram.length; i += 1) {
+        running += histogram[i];
+        if (median === 0 && running >= medianTarget) {
+          median = i;
+        }
+        if (running >= quantileTarget) {
+          quantile85 = i;
+          break;
+        }
+      }
+    }
+
     const brightnessLog = brightnessMean.toFixed(2);
-    const brightnessThreshold = 150;
+    const medianLog = median.toFixed(0);
+    const quantileLog = quantile85.toFixed(0);
+
+    // A receipt is "mostly white" if ANY of these are true:
+    // - Mean brightness is above 90 (primary check), OR
+    // - 40%+ of pixels are light (>180), OR
+    // - Median intensity is above 185 (most pixels are light), OR
+    // - 85th percentile is above 200
+    const meanThreshold = 90;
+    const whiteRatioThreshold = 0.4;
+    const medianThreshold = 185;
+    const quantileThreshold = 200;
+    const isMostlyWhite =
+      brightnessMean >= meanThreshold ||
+      whiteRatio >= whiteRatioThreshold ||
+      median >= medianThreshold ||
+      quantile85 >= quantileThreshold;
 
     let processedImg;
-    if (brightnessMean < brightnessThreshold) {
-      processedImg = grayscale.clone().negate().normalize();
+    if (!isMostlyWhite) {
+      // Dark receipt - invert to make background white
+      processedImg = grayscale
+        .clone()
+        .negate()
+        .normalize({ lower: 5, upper: 95 })
+        .linear(1.05, 0);
       console.log(
-        `Detected dark image (mean brightness ${brightnessLog}). Inverting to create white-dominant output: ${destPath}`
+        `Detected dark image (mean ${brightnessLog}, white ratio ${whiteRatio.toFixed(
+          3
+        )}, median ${medianLog}, q85 ${quantileLog}). Inverting to white background: ${destPath}`
       );
     } else {
-      processedImg = grayscale.clone().normalize();
+      // Light receipt - keep as is with mild enhancement
+      processedImg = grayscale.clone().linear(1.05, 0).normalize();
       console.log(
-        `Detected light image (mean brightness ${brightnessLog}). Keeping light tones: ${destPath}`
+        `Detected light image (mean ${brightnessLog}, white ratio ${whiteRatio.toFixed(
+          3
+        )}, median ${medianLog}, q85 ${quantileLog}). Keeping white background: ${destPath}`
       );
     }
 
