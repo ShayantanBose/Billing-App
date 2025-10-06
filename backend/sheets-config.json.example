@@ -1,3 +1,5 @@
 {
-  "spreadsheetId": "your-google-sheets-spreadsheet-id-will-be-stored-here"
+  "spreadsheetId": "your-google-sheets-spreadsheet-id-here",
+  "docId": "your-google-docs-document-id-here",
+  "driveFolderId": "your-google-drive-folder-id-here"
 }

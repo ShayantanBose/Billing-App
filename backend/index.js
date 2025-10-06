@@ -17,6 +17,11 @@ const {
   clearSheetData,
   initializeGoogleDriveAndDocs,
   clearDocImages,
+  getDocId,
+  saveDocId,
+  getDriveFolderId,
+  saveDriveFolderId,
+  getConfig,
 } = require("./googleSheetsService");
 
 const app = express();
@@ -255,11 +260,12 @@ app.post("/api/submit", upload.single("image"), async (req, res) => {
 
     // Upload to Google Drive
     const { drive } = await initializeGoogleDriveAndDocs();
+    const driveFolderId = getDriveFolderId();
     const driveRes = await drive.files.create({
       requestBody: {
         name: uniqueName,
         mimeType: "image/jpeg",
-        parents: [process.env.GDRIVE_FOLDER_ID], // Optional: set a folder
+        parents: driveFolderId ? [driveFolderId] : undefined, // Optional: set a folder
       },
       media: {
         mimeType: "image/jpeg",
@@ -279,55 +285,61 @@ app.post("/api/submit", upload.single("image"), async (req, res) => {
 
     // Insert image into Google Doc (side by side, 2 per row, no text)
     const { docs } = await initializeGoogleDriveAndDocs();
-    const DOC_ID = process.env.GDOC_ID;
-    const doc = await docs.documents.get({ documentId: DOC_ID });
-    let endIndex =
-      doc.data.body.content[doc.data.body.content.length - 1].endIndex - 1;
+    const DOC_ID = getDocId();
+    if (!DOC_ID) {
+      console.warn(
+        "No Google Doc ID configured. Skipping Doc image insertion."
+      );
+    } else {
+      const doc = await docs.documents.get({ documentId: DOC_ID });
+      let endIndex =
+        doc.data.body.content[doc.data.body.content.length - 1].endIndex - 1;
 
-    // Find the last paragraph's text to determine if we need a tab or newline
-    let lastPara = doc.data.body.content[doc.data.body.content.length - 2];
-    let lastText = "";
-    if (lastPara && lastPara.paragraph && lastPara.paragraph.elements) {
-      lastText = lastPara.paragraph.elements
-        .map((e) => (e.textRun ? e.textRun.content : ""))
-        .join("");
-    }
-    // Count images in the last row (by counting tabs)
-    const imagesInRow = (lastText.match(/\t/g) || []).length + 1;
-    let requests = [
-      {
-        insertInlineImage: {
-          location: { index: endIndex },
-          uri: imageUrl,
-          objectSize: {
-            height: { magnitude: 300, unit: "PT" },
-            width: { magnitude: 200, unit: "PT" },
+      // Find the last paragraph's text to determine if we need a tab or newline
+      let lastPara = doc.data.body.content[doc.data.body.content.length - 2];
+      let lastText = "";
+      if (lastPara && lastPara.paragraph && lastPara.paragraph.elements) {
+        lastText = lastPara.paragraph.elements
+          .map((e) => (e.textRun ? e.textRun.content : ""))
+          .join("");
+      }
+      // Count images in the last row (by counting tabs)
+      const imagesInRow = (lastText.match(/\t/g) || []).length + 1;
+      let requests = [
+        {
+          insertInlineImage: {
+            location: { index: endIndex },
+            uri: imageUrl,
+            objectSize: {
+              height: { magnitude: 300, unit: "PT" },
+              width: { magnitude: 200, unit: "PT" },
+            },
           },
         },
-      },
-    ];
-    if (imagesInRow % 2 === 1) {
-      // After first image in row, insert tab
-      requests.push({
-        insertText: {
-          location: { index: endIndex + 1 },
-          text: "\t",
-        },
+      ];
+      if (imagesInRow % 2 === 1) {
+        // After first image in row, insert tab
+        requests.push({
+          insertText: {
+            location: { index: endIndex + 1 },
+            text: "\t",
+          },
+        });
+      } else {
+        // After second image in row, insert newline
+        requests.push({
+          insertText: {
+            location: { index: endIndex + 1 },
+            text: "\n",
+          },
+        });
+      }
+      await docs.documents.batchUpdate({
+        documentId: DOC_ID,
+        requestBody: { requests },
       });
-    } else {
-      // After second image in row, insert newline
-      requests.push({
-        insertText: {
-          location: { index: endIndex + 1 },
-          text: "\n",
-        },
-      });
+      console.log("Inserted image into Google Doc.");
     }
-    await docs.documents.batchUpdate({
-      documentId: DOC_ID,
-      requestBody: { requests },
-    });
-    console.log("Inserted image into Google Doc.");
     await appendToGoogleSheets({
       date,
       from,
@@ -411,11 +423,14 @@ app.post("/api/sheets/clear", async (req, res) => {
 // Endpoint to remove all inline images from the configured Google Doc
 app.post("/api/docs/images/clear", async (req, res) => {
   try {
-    const DOC_ID = process.env.GDOC_ID;
+    const DOC_ID = getDocId();
     if (!DOC_ID) {
       return res
         .status(400)
-        .json({ message: "GDOC_ID is not configured in environment." });
+        .json({
+          message:
+            "Google Doc ID is not configured. Please set it in the Admin Panel.",
+        });
     }
 
     const result = await clearDocImages(DOC_ID);
@@ -429,6 +444,40 @@ app.post("/api/docs/images/clear", async (req, res) => {
       message: error?.message || "Failed to clear Google Doc images.",
       details: error?.response?.data || null,
     });
+  }
+});
+
+// Endpoint to get configuration (Sheets ID, Doc ID, Drive Folder ID)
+app.get("/api/config", (req, res) => {
+  const config = getConfig();
+  res.json(config);
+});
+
+// Endpoint to update configuration
+app.post("/api/config", (req, res) => {
+  try {
+    const { spreadsheetId, docId, driveFolderId } = req.body;
+
+    if (spreadsheetId !== undefined) {
+      if (spreadsheetId) saveSpreadsheetId(spreadsheetId);
+    }
+
+    if (docId !== undefined) {
+      if (docId) saveDocId(docId);
+    }
+
+    if (driveFolderId !== undefined) {
+      if (driveFolderId) saveDriveFolderId(driveFolderId);
+    }
+
+    const updatedConfig = getConfig();
+    res.json({
+      message: "Configuration updated successfully",
+      config: updatedConfig,
+    });
+  } catch (error) {
+    console.error("Error updating configuration:", error);
+    res.status(500).json({ message: "Failed to update configuration" });
   }
 });
 

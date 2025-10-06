@@ -26,6 +26,12 @@ const AdminPanel: React.FC = () => {
     hasSheet: false,
   });
   const [sheetsUrl, setSheetsUrl] = useState<string>("");
+  const [config, setConfig] = useState({
+    spreadsheetId: "",
+    docId: "",
+    driveFolderId: "",
+  });
+  const [showConfig, setShowConfig] = useState(false);
 
   useEffect(() => {
     fetch("http://localhost:3001/api/images")
@@ -41,6 +47,15 @@ const AdminPanel: React.FC = () => {
       .then((res) => res.json())
       .then((data) => setSheetsUrl(data.url))
       .catch(() => setSheetsUrl(""));
+    fetch("http://localhost:3001/api/config")
+      .then((res) => res.json())
+      .then((data) =>
+        setConfig({
+          spreadsheetId: data.spreadsheetId || "",
+          docId: data.docId || "",
+          driveFolderId: data.driveFolderId || "",
+        })
+      );
   }, []);
 
   const createNewSheet = async () => {
@@ -127,6 +142,28 @@ const AdminPanel: React.FC = () => {
     }
   };
 
+  const handleSaveConfig = async () => {
+    setStatus("Saving configuration...");
+    try {
+      const res = await fetch("http://localhost:3001/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(config),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setStatus("Configuration saved successfully!");
+        setConfig(data.config);
+        setShowConfig(false);
+      } else {
+        setStatus(`Failed to save configuration: ${data.message}`);
+      }
+    } catch (error) {
+      console.error(error);
+      setStatus("Failed to save configuration.");
+    }
+  };
+
   return (
     <div
       style={{
@@ -172,6 +209,124 @@ const AdminPanel: React.FC = () => {
       >
         Back to Main App
       </Link>
+
+      {/* Configuration Section */}
+      <div
+        style={{
+          marginBottom: 24,
+          padding: 16,
+          backgroundColor: "#e3f2fd",
+          borderRadius: 8,
+          border: "1px solid #1976d2",
+        }}
+      >
+        <h3 style={{ margin: "0 0 12px 0", color: "#1565c0" }}>
+          Google Integration Configuration
+        </h3>
+        <p style={{ margin: "0 0 12px 0", fontSize: 14, color: "#666" }}>
+          Configure your Google Sheets, Docs, and Drive IDs. These are saved
+          locally on your device.
+        </p>
+        <button
+          onClick={() => setShowConfig(!showConfig)}
+          style={{
+            padding: "8px 16px",
+            backgroundColor: "#1976d2",
+            color: "white",
+            border: "none",
+            borderRadius: 4,
+            cursor: "pointer",
+            fontWeight: 600,
+          }}
+        >
+          {showConfig ? "Hide Configuration" : "Show Configuration"}
+        </button>
+
+        {showConfig && (
+          <div style={{ marginTop: 16 }}>
+            <div style={{ marginBottom: 12 }}>
+              <label
+                style={{ display: "block", marginBottom: 4, fontWeight: 600 }}
+              >
+                Google Sheets ID (optional - will create if not provided):
+              </label>
+              <input
+                type="text"
+                value={config.spreadsheetId}
+                onChange={(e) =>
+                  setConfig({ ...config, spreadsheetId: e.target.value })
+                }
+                placeholder="e.g., 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  borderRadius: 4,
+                  border: "1px solid #ccc",
+                  fontSize: 14,
+                }}
+              />
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label
+                style={{ display: "block", marginBottom: 4, fontWeight: 600 }}
+              >
+                Google Docs ID (for image insertion):
+              </label>
+              <input
+                type="text"
+                value={config.docId}
+                onChange={(e) =>
+                  setConfig({ ...config, docId: e.target.value })
+                }
+                placeholder="e.g., 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  borderRadius: 4,
+                  border: "1px solid #ccc",
+                  fontSize: 14,
+                }}
+              />
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label
+                style={{ display: "block", marginBottom: 4, fontWeight: 600 }}
+              >
+                Google Drive Folder ID (for image storage):
+              </label>
+              <input
+                type="text"
+                value={config.driveFolderId}
+                onChange={(e) =>
+                  setConfig({ ...config, driveFolderId: e.target.value })
+                }
+                placeholder="e.g., 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  borderRadius: 4,
+                  border: "1px solid #ccc",
+                  fontSize: 14,
+                }}
+              />
+            </div>
+            <button
+              onClick={handleSaveConfig}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#4caf50",
+                color: "white",
+                border: "none",
+                borderRadius: 4,
+                cursor: "pointer",
+                fontWeight: 600,
+              }}
+            >
+              Save Configuration
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Google Sheets Status */}
       <div

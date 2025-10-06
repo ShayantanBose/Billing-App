@@ -10,6 +10,9 @@ const TOKEN_PATH = path.join(__dirname, "token.json");
 let auth = null;
 let sheets = null;
 
+// Default sheet name - can be configured
+const DEFAULT_SHEET_NAME = "Receipts";
+
 // Add Google Drive and Docs API authentication
 let drive = null;
 let docs = null;
@@ -150,6 +153,44 @@ async function clearDocImages(documentId) {
   }
 }
 
+// Get the first sheet name from a spreadsheet, or create "Receipts" sheet if none exists
+async function getSheetName(spreadsheetId) {
+  try {
+    if (!sheets) {
+      const initialized = await initializeGoogleSheets();
+      if (!initialized) return DEFAULT_SHEET_NAME;
+    }
+
+    const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
+    const sheetList = spreadsheet.data.sheets || [];
+
+    if (sheetList.length === 0) {
+      console.warn(
+        "No sheets found in spreadsheet. Using default name:",
+        DEFAULT_SHEET_NAME
+      );
+      return DEFAULT_SHEET_NAME;
+    }
+
+    // Check if "Receipts" sheet exists
+    const receiptsSheet = sheetList.find(
+      (sheet) => sheet.properties?.title === DEFAULT_SHEET_NAME
+    );
+
+    if (receiptsSheet) {
+      return DEFAULT_SHEET_NAME;
+    }
+
+    // Use the first sheet's name
+    const firstSheetName = sheetList[0].properties?.title || DEFAULT_SHEET_NAME;
+    console.log(`Using sheet name: "${firstSheetName}"`);
+    return firstSheetName;
+  } catch (error) {
+    console.error("Error getting sheet name:", error);
+    return DEFAULT_SHEET_NAME;
+  }
+}
+
 // Create a new Google Sheet
 async function createSheet(title = "Receipts Database") {
   try {
@@ -259,6 +300,9 @@ async function appendToSheet(spreadsheetId, data) {
       if (!initialized) return false;
     }
 
+    // Get the actual sheet name
+    const sheetName = await getSheetName(spreadsheetId);
+
     // Find the first empty row in the range 11-20
     let targetRow = 11;
     let slNo = 1;
@@ -267,7 +311,7 @@ async function appendToSheet(spreadsheetId, data) {
     for (let row = 11; row <= 20; row++) {
       const checkResp = await sheets.spreadsheets.values.get({
         spreadsheetId,
-        range: `Receipts!A${row}`,
+        range: `${sheetName}!A${row}`,
       });
 
       const cellValue = checkResp.data.values?.[0]?.[0];
@@ -325,16 +369,17 @@ async function appendToSheet(spreadsheetId, data) {
     // Use update to write to the exact row
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: `Receipts!A${targetRow}:J${targetRow}`,
+      range: `${sheetName}!A${targetRow}:J${targetRow}`,
       valueInputOption: "RAW",
       resource: { values },
     });
 
-    console.log(`Data written to Google Sheet at row ${targetRow}`);
+    console.log(
+      `Data written to Google Sheet "${sheetName}" at row ${targetRow}`
+    );
 
     // Update totals in row 19 for columns G, H, I, J
     await updateTotals(spreadsheetId);
-
     return true;
   } catch (error) {
     console.error("Error appending to Google Sheet:", error);
@@ -350,10 +395,13 @@ async function updateTotals(spreadsheetId) {
       if (!initialized) return false;
     }
 
+    // Get the actual sheet name
+    const sheetName = await getSheetName(spreadsheetId);
+
     // Read data from rows 11-18 for columns G, H, I, J
     const dataResp = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: "Receipts!G11:J18",
+      range: `${sheetName}!G11:J18`,
     });
 
     const values = dataResp.data.values || [];
@@ -395,15 +443,17 @@ async function updateTotals(spreadsheetId) {
 
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: "Receipts!G19:J19",
+      range: `${sheetName}!G19:J19`,
       valueInputOption: "RAW",
       resource: { values: [totalsRow] },
     });
 
     console.log(
-      `Totals updated in row 19: G=${totalG.toFixed(2)}, H=${totalH.toFixed(
+      `Totals updated in "${sheetName}" row 19: G=${totalG.toFixed(
         2
-      )}, I=${totalI.toFixed(2)}, J=${totalJ.toFixed(2)}`
+      )}, H=${totalH.toFixed(2)}, I=${totalI.toFixed(2)}, J=${totalJ.toFixed(
+        2
+      )}`
     );
 
     return true;
@@ -450,13 +500,16 @@ async function clearSheetData(spreadsheetId) {
     if (!initialized) return false;
   }
 
+  // Get the actual sheet name
+  const sheetName = await getSheetName(spreadsheetId);
+
   console.log(
-    "Clearing data rows A11:J20 (preserving rows 1-10 with headers/styling and rows 21+ with additional data)..."
+    `Clearing data rows A11:J20 in "${sheetName}" (preserving rows 1-10 with headers/styling and rows 21+ with additional data)...`
   );
 
   await sheets.spreadsheets.values.clear({
     spreadsheetId,
-    range: "Receipts!A11:K18",
+    range: `${sheetName}!A11:J20`,
   });
 
   console.log("Sheet data cleared successfully.");
@@ -464,7 +517,7 @@ async function clearSheetData(spreadsheetId) {
   // Clear totals in row 19
   await sheets.spreadsheets.values.update({
     spreadsheetId,
-    range: "Receipts!G19:J19",
+    range: `${sheetName}!G19:J19`,
     valueInputOption: "RAW",
     resource: { values: [["0.00", "0.00", "0.00", "0.00"]] },
   });
@@ -501,8 +554,70 @@ function getSpreadsheetId() {
 // Save spreadsheet ID to config
 function saveSpreadsheetId(spreadsheetId) {
   const configPath = path.join(__dirname, "sheets-config.json");
-  const config = { spreadsheetId };
+  const config = JSON.parse(
+    fs.existsSync(configPath) ? fs.readFileSync(configPath, "utf8") : "{}"
+  );
+  config.spreadsheetId = spreadsheetId;
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+}
+
+// Get Google Doc ID from config
+function getDocId() {
+  const configPath = path.join(__dirname, "sheets-config.json");
+  if (fs.existsSync(configPath)) {
+    const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    return config.docId || process.env.GDOC_ID || null;
+  }
+  return process.env.GDOC_ID || null;
+}
+
+// Save Google Doc ID to config
+function saveDocId(docId) {
+  const configPath = path.join(__dirname, "sheets-config.json");
+  const config = JSON.parse(
+    fs.existsSync(configPath) ? fs.readFileSync(configPath, "utf8") : "{}"
+  );
+  config.docId = docId;
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+}
+
+// Get Drive Folder ID from config
+function getDriveFolderId() {
+  const configPath = path.join(__dirname, "sheets-config.json");
+  if (fs.existsSync(configPath)) {
+    const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    return config.driveFolderId || process.env.GDRIVE_FOLDER_ID || null;
+  }
+  return process.env.GDRIVE_FOLDER_ID || null;
+}
+
+// Save Drive Folder ID to config
+function saveDriveFolderId(folderId) {
+  const configPath = path.join(__dirname, "sheets-config.json");
+  const config = JSON.parse(
+    fs.existsSync(configPath) ? fs.readFileSync(configPath, "utf8") : "{}"
+  );
+  config.driveFolderId = folderId;
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+}
+
+// Get all configuration
+function getConfig() {
+  const configPath = path.join(__dirname, "sheets-config.json");
+  if (fs.existsSync(configPath)) {
+    const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+    return {
+      spreadsheetId: config.spreadsheetId || null,
+      docId: config.docId || process.env.GDOC_ID || null,
+      driveFolderId:
+        config.driveFolderId || process.env.GDRIVE_FOLDER_ID || null,
+    };
+  }
+  return {
+    spreadsheetId: null,
+    docId: process.env.GDOC_ID || null,
+    driveFolderId: process.env.GDRIVE_FOLDER_ID || null,
+  };
 }
 
 module.exports = {
@@ -515,4 +630,9 @@ module.exports = {
   clearSheetData,
   initializeGoogleDriveAndDocs,
   clearDocImages,
+  getDocId,
+  saveDocId,
+  getDriveFolderId,
+  saveDriveFolderId,
+  getConfig,
 };
