@@ -8,6 +8,7 @@ It provides a user-friendly interface for uploading receipts or bills, extractin
 ## Features
 
 - **Image Upload:** Upload a bill or receipt image directly from your device.
+- **Clipboard Paste & Drag-and-Drop:** Skip downloading—copy a bill screenshot and press <kbd>Ctrl</kbd> + <kbd>V</kbd>, or drop it straight into the app.
 - **OCR Extraction:** Uses [Tesseract.js](https://github.com/naptha/tesseract.js) to extract text from images in the browser.
 - **Smart Parsing:** Extracts structured data such as customer name, ride details, and price (with robust handling for rupee symbols and OCR quirks).
 - **Data Review:** Preview and edit extracted data before submission.

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import "./App.css";
 import {
   processImageWithOCR,
@@ -25,6 +25,18 @@ interface OCRResult {
   status: string;
 }
 
+const createEmptyOcrResult = (): OCRResult => ({
+  result: null,
+  date: "",
+  amount: "",
+  status: "",
+});
+
+const sanitizeAmount = (value: string | undefined | null): string => {
+  if (!value) return "";
+  return value.replace(/₹/g, "").trim();
+};
+
 function MainApp() {
   const [category, setCategory] = useState("Food");
   const [images, setImages] = useState<File[]>([]);
@@ -39,15 +51,159 @@ function MainApp() {
   const [remarks] = useState("");
   const [budgetHead] = useState("");
   const [status, setStatus] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
+
+  const addImages = useCallback((incoming: File[], replace = false) => {
+    if (!incoming.length) return;
+
+    const sanitized = incoming.filter(
+      (file) => file.type.startsWith("image/") && file.size > 0
+    );
+    if (!sanitized.length) return;
+
+    setImages((prevImages) => {
+      const nextImages = replace ? sanitized : [...prevImages, ...sanitized];
+      const nextIndex = replace ? 0 : prevImages.length;
+      setCurrentIndex(nextIndex);
+      return nextImages;
+    });
+
+    setOcrResults((prevResults) => {
+      const placeholders = sanitized.map(() => createEmptyOcrResult());
+      return replace ? placeholders : [...prevResults, ...placeholders];
+    });
+  }, []);
+
+  const extractImageFiles = useCallback(
+    (clipboardData: DataTransfer | null) => {
+      if (!clipboardData) return [] as File[];
+      const timestamp = Date.now();
+      const collected: File[] = [];
+
+      const clipboardFiles = clipboardData.files
+        ? Array.from(clipboardData.files)
+        : [];
+      clipboardFiles.forEach((file, index) => {
+        if (file && file.type.startsWith("image/") && file.size > 0) {
+          if (file.name) {
+            collected.push(file);
+          } else {
+            const extension =
+              file.type.split("/").pop()?.split("+")?.[0] || "png";
+            collected.push(
+              new File(
+                [file],
+                `pasted-bill-${timestamp}-${index}.${extension}`,
+                { type: file.type || "image/png" }
+              )
+            );
+          }
+        }
+      });
+
+      if (collected.length) {
+        return collected;
+      }
+
+      const items = clipboardData.items ? Array.from(clipboardData.items) : [];
+      items.forEach((item, index) => {
+        if (item.type.startsWith("image/")) {
+          const blob = item.getAsFile();
+          if (blob && blob.size > 0) {
+            const mimeType = blob.type || "image/png";
+            const extension =
+              mimeType.split("/").pop()?.split("+")?.[0] || "png";
+            if (blob instanceof File && blob.name) {
+              collected.push(blob);
+            } else {
+              collected.push(
+                new File(
+                  [blob],
+                  `pasted-bill-${timestamp}-item-${index}.${extension}`,
+                  { type: mimeType }
+                )
+              );
+            }
+          }
+        }
+      });
+
+      return collected;
+    },
+    []
+  );
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    setImages(files);
-    setOcrResults(
-      files.map(() => ({ result: null, date: "", amount: "", status: "" }))
-    );
-    setCurrentIndex(0);
+    addImages(files, true);
+    if (files.length) {
+      setStatus(
+        files.length > 1 ? `Loaded ${files.length} images.` : "Loaded 1 image."
+      );
+    }
+    e.target.value = "";
   };
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(false);
+    const files = Array.from(event.dataTransfer?.files || []).filter(
+      (file) => file.type.startsWith("image/") && file.size > 0
+    );
+    if (files.length) {
+      addImages(files);
+      setStatus(
+        files.length > 1
+          ? `Added ${files.length} dropped images.`
+          : "Dropped image added."
+      );
+    }
+  };
+
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = "copy";
+    }
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const related = event.relatedTarget as Node | null;
+    if (related && event.currentTarget.contains(related)) {
+      return;
+    }
+    setIsDragging(false);
+  };
+
+  useEffect(() => {
+    const handlePaste = (event: ClipboardEvent) => {
+      const activeElement = document.activeElement as HTMLElement | null;
+      if (
+        activeElement &&
+        (activeElement.tagName === "INPUT" ||
+          activeElement.tagName === "TEXTAREA" ||
+          activeElement.isContentEditable)
+      ) {
+        return;
+      }
+
+      const files = extractImageFiles(event.clipboardData || null);
+      if (files.length) {
+        event.preventDefault();
+        addImages(files);
+        setStatus(
+          files.length > 1
+            ? `Added ${files.length} pasted images.`
+            : "Pasted image added."
+        );
+      }
+    };
+
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
+  }, [addImages, extractImageFiles]);
 
   const handleProcessImage = async () => {
     if (!images[currentIndex]) return;
@@ -60,14 +216,15 @@ function MainApp() {
     try {
       const text = await processImageWithOCR(images[currentIndex]);
       const data = parseOCRText(text);
+      const extractedAmount =
+        data["Selected Price"] ||
+        data["Selected Price (max fallback)"] ||
+        data["Total Amount"] ||
+        "";
       updatedOcrResults[currentIndex] = {
         result: data,
         date: data["Date"] || "",
-        amount:
-          data["Selected Price"] ||
-          data["Selected Price (max fallback)"] ||
-          data["Total Amount"] ||
-          "",
+        amount: sanitizeAmount(extractedAmount),
         status: "OCR processing complete. Review and submit.",
       };
       setOcrResults([...updatedOcrResults]);
@@ -85,7 +242,7 @@ function MainApp() {
     const updatedOcrResults = [...ocrResults];
     const currentResult = updatedOcrResults[currentIndex];
     if (currentResult) {
-      currentResult.amount = e.target.value;
+      currentResult.amount = sanitizeAmount(e.target.value);
       setOcrResults(updatedOcrResults);
     }
   };
@@ -101,11 +258,9 @@ function MainApp() {
 
   const handleSubmit = async () => {
     const currentOcrResult = ocrResults[currentIndex];
-    if (
-      !images[currentIndex] ||
-      !currentOcrResult?.date ||
-      !currentOcrResult?.amount
-    ) {
+    const sanitizedAmount = sanitizeAmount(currentOcrResult?.amount);
+    const normalizedPurpose = purpose.trim();
+    if (!images[currentIndex] || !currentOcrResult?.date || !sanitizedAmount) {
       setStatus("Please process an image and review the extracted fields.");
       return;
     }
@@ -124,22 +279,23 @@ function MainApp() {
       foodS5: "",
       foodS6: "",
       misc: "",
-      amount: currentOcrResult.amount,
+      amount: sanitizedAmount,
       billDetails,
       remarks,
       budgetHead,
       image: images[currentIndex],
     };
     if (category === "Food") {
-      data.foodS1 = currentOcrResult.amount;
+      data.foodS1 = sanitizedAmount;
+      data.purpose = normalizedPurpose;
     } else if (category === "Travel") {
       data.from = from;
       data.to = to;
       data.modeOfTravel = modeOfTravel;
-      data.purpose = purpose;
-      data.travelExpenses = currentOcrResult.amount;
+      data.purpose = normalizedPurpose;
+      data.travelExpenses = sanitizedAmount;
     } else if (category === "Miscellaneous") {
-      data.misc = currentOcrResult.amount;
+      data.misc = sanitizedAmount;
     }
     const success = await saveData(
       data.date,
@@ -155,7 +311,7 @@ function MainApp() {
       data.foodS5,
       data.foodS6,
       data.misc,
-      data.amount,
+      sanitizedAmount,
       billDetails,
       remarks,
       budgetHead,
@@ -243,13 +399,15 @@ function MainApp() {
                 value={modeOfTravel}
                 onChange={(e) => setModeOfTravel(e.target.value)}
               />
-              <input
-                type="text"
-                placeholder="Purpose"
-                value={purpose}
-                onChange={(e) => setPurpose(e.target.value)}
-              />
             </>
+          )}
+          {(category === "Travel" || category === "Food") && (
+            <input
+              type="text"
+              placeholder="Purpose"
+              value={purpose}
+              onChange={(e) => setPurpose(e.target.value)}
+            />
           )}
           {category === "Miscellaneous" && (
             <input
@@ -265,6 +423,22 @@ function MainApp() {
             multiple
             onChange={handleFileChange}
           />
+          <div
+            className={`paste-drop-zone${isDragging ? " dragging" : ""}`}
+            onDragOver={handleDragOver}
+            onDragEnter={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            tabIndex={0}
+            role="button"
+            aria-label="Paste or drop bill images"
+          >
+            <p>
+              <strong>Tip:</strong> Copy a bill and press <kbd>Ctrl + V</kbd>,
+              or drag and drop the image here.
+            </p>
+            <small>We'll queue pasted images automatically.</small>
+          </div>
           {images.length > 0 && (
             <div
               style={{
