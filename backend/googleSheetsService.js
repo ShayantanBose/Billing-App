@@ -546,7 +546,17 @@ function getSpreadsheetId() {
   const configPath = path.join(__dirname, "sheets-config.json");
   if (fs.existsSync(configPath)) {
     const config = JSON.parse(fs.readFileSync(configPath));
-    return config.spreadsheetId;
+    let spreadsheetId = config.spreadsheetId;
+    
+    // Extract Spreadsheet ID from URL if it's a full URL
+    if (spreadsheetId && typeof spreadsheetId === 'string' && spreadsheetId.includes('docs.google.com')) {
+      const match = spreadsheetId.match(/\/d\/([a-zA-Z0-9-_]+)/);
+      if (match && match[1]) {
+        return match[1];
+      }
+    }
+    
+    return spreadsheetId;
   }
   return null;
 }
@@ -557,6 +567,15 @@ function saveSpreadsheetId(spreadsheetId) {
   const config = JSON.parse(
     fs.existsSync(configPath) ? fs.readFileSync(configPath, "utf8") : "{}"
   );
+  
+  // Extract Spreadsheet ID from URL if it's a full URL before saving
+  if (spreadsheetId && typeof spreadsheetId === 'string' && spreadsheetId.includes('docs.google.com')) {
+    const match = spreadsheetId.match(/\/d\/([a-zA-Z0-9-_]+)/);
+    if (match && match[1]) {
+      spreadsheetId = match[1];
+    }
+  }
+  
   config.spreadsheetId = spreadsheetId;
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 }
@@ -564,11 +583,25 @@ function saveSpreadsheetId(spreadsheetId) {
 // Get Google Doc ID from config
 function getDocId() {
   const configPath = path.join(__dirname, "sheets-config.json");
+  let docId = null;
+  
   if (fs.existsSync(configPath)) {
     const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-    return config.docId || process.env.GDOC_ID || null;
+    docId = config.docId || process.env.GDOC_ID || null;
+  } else {
+    docId = process.env.GDOC_ID || null;
   }
-  return process.env.GDOC_ID || null;
+  
+  // Extract Doc ID from URL if it's a full URL
+  if (docId && typeof docId === 'string' && docId.includes('docs.google.com')) {
+    const match = docId.match(/\/d\/([a-zA-Z0-9-_]+)/);
+    if (match && match[1]) {
+      console.log(`Extracted Doc ID: ${match[1]} from URL: ${docId}`);
+      return match[1];
+    }
+  }
+  
+  return docId;
 }
 
 // Save Google Doc ID to config
@@ -577,6 +610,15 @@ function saveDocId(docId) {
   const config = JSON.parse(
     fs.existsSync(configPath) ? fs.readFileSync(configPath, "utf8") : "{}"
   );
+  
+  // Extract Doc ID from URL if it's a full URL before saving
+  if (docId && typeof docId === 'string' && docId.includes('docs.google.com')) {
+    const match = docId.match(/\/d\/([a-zA-Z0-9-_]+)/);
+    if (match && match[1]) {
+      docId = match[1];
+    }
+  }
+  
   config.docId = docId;
   fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 }

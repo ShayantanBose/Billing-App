@@ -47,14 +47,19 @@ const upload = multer({ dest: uploadsDir });
 
 // Initialize Google Sheets on startup
 let isGoogleSheetsReady = false;
-initializeGoogleSheets().then((ready) => {
-  isGoogleSheetsReady = ready;
-  if (ready) {
-    console.log("Google Sheets API initialized successfully");
-  } else {
-    console.log("Google Sheets API not initialized - check credentials");
-  }
-});
+initializeGoogleSheets()
+  .then((ready) => {
+    isGoogleSheetsReady = ready;
+    if (ready) {
+      console.log("Google Sheets API initialized successfully");
+    } else {
+      console.log("Google Sheets API not initialized - check credentials");
+    }
+  })
+  .catch((error) => {
+    console.error("Error during Google Sheets initialization:", error);
+    isGoogleSheetsReady = false;
+  });
 
 // Helper: Append to Google Sheets
 async function appendToGoogleSheets(data) {
@@ -538,7 +543,29 @@ app.use((req, res, next) => {
   }
 });
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`Backend server listening at http://localhost:${port}`);
   console.log(`Frontend available at http://localhost:${port}`);
+});
+
+// Handle server errors (like port already in use)
+server.on("error", (error) => {
+  if (error.code === "EADDRINUSE") {
+    console.error(`Port ${port} is already in use. Please close the other application or use a different port.`);
+  } else {
+    console.error("Server error:", error);
+  }
+  process.exit(1);
+});
+
+// Handle unhandled promise rejections
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+  // Don't exit the process, just log the error
+});
+
+// Handle uncaught exceptions
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught Exception:", error);
+  // Don't exit the process, just log the error
 });
