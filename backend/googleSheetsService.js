@@ -192,7 +192,7 @@ async function getSheetName(spreadsheetId) {
 }
 
 // Insert rows at a specific position without deleting existing data
-// Also copies totals row content after insertion (row 19→29 or row 29→39)
+// Also copies totals row content after insertion (row 19→29, row 29→39, or row 39→59)
 async function insertRowsAtPosition(
   spreadsheetId,
   sheetName,
@@ -220,8 +220,18 @@ async function insertRowsAtPosition(
     // Determine which row to read based on startRow
     // If inserting at row 16: read row 19 (totals before first expansion)
     // If inserting at row 26: read row 29 (totals after first expansion)
-    let sourceRow = startRow === 16 ? 19 : 29;
-    
+    // If inserting at row 36: read row 39 (totals after second expansion)
+    let sourceRow;
+    if (startRow === 16) {
+      sourceRow = 19;
+    } else if (startRow === 26) {
+      sourceRow = 29;
+    } else if (startRow === 36) {
+      sourceRow = 39;
+    } else {
+      sourceRow = 19; // fallback
+    }
+
     // Step 1: Read the content from the source row BEFORE insertion
     console.log(`Reading row ${sourceRow} content before insertion...`);
     const sourceData = await sheets.spreadsheets.values.get({
@@ -388,18 +398,20 @@ async function appendToSheet(spreadsheetId, data) {
     // Get the actual sheet name
     const sheetName = await getSheetName(spreadsheetId);
 
-    // Find the first empty row in the range 11-40 (expanded to handle two expansions of 10 rows each)
-    // Auto-expansion: 
+    // Find the first empty row in the range 11-60 (expanded to handle three expansions)
+    // Auto-expansion:
     // 1. When row 15 is filled (next write would be row 16), 10 new rows are inserted at row 16
     // 2. When row 25 is filled (next write would be row 26), 10 new rows are inserted at row 26
+    // 3. When row 35 is filled (next write would be row 36), 20 new rows are inserted at row 36
     // This pushes existing data (like totals) down without erasing it
     let targetRow = 11;
     let slNo = 1;
     let hasExpandedAt16 = false;
     let hasExpandedAt26 = false;
+    let hasExpandedAt36 = false;
 
-    // Check each row from 11 to 40 to find the first empty one
-    for (let row = 11; row <= 40; row++) {
+    // Check each row from 11 to 60 to find the first empty one
+    for (let row = 11; row <= 60; row++) {
       const checkResp = await sheets.spreadsheets.values.get({
         spreadsheetId,
         range: `${sheetName}!A${row}`,
@@ -436,12 +448,24 @@ async function appendToSheet(spreadsheetId, data) {
           );
         }
 
+        // Third expansion: If we're about to write to row 36 (meaning row 35 is filled), insert 20 new rows
+        if (targetRow === 36 && !hasExpandedAt36) {
+          console.log(
+            "Row 35 is filled. Inserting 20 new rows at position 36..."
+          );
+          await insertRowsAtPosition(spreadsheetId, sheetName, 36, 20);
+          hasExpandedAt36 = true;
+          console.log(
+            "Successfully inserted 20 rows at position 36. Data below has been pushed down."
+          );
+        }
+
         break;
       }
 
-      if (row === 40) {
+      if (row === 60) {
         throw new Error(
-          "Data range is full (rows 11-40). Please clear data before adding more entries."
+          "Data range is full (rows 11-60). Please clear data before adding more entries."
         );
       }
     }
@@ -514,9 +538,9 @@ async function updateTotals(spreadsheetId) {
     // Get the actual sheet name
     const sheetName = await getSheetName(spreadsheetId);
 
-    // Find the last filled row in the data range (expanded to 40 to match appendToSheet)
+    // Find the last filled row in the data range (expanded to 60 to match appendToSheet)
     let lastDataRow = 11;
-    for (let row = 11; row <= 40; row++) {
+    for (let row = 11; row <= 60; row++) {
       const checkResp = await sheets.spreadsheets.values.get({
         spreadsheetId,
         range: `${sheetName}!A${row}`,
@@ -569,9 +593,12 @@ async function updateTotals(spreadsheetId) {
     // Determine totals row based on data expansion:
     // - Row 19: if data is in rows 11-15 (no expansion yet)
     // - Row 29: if data is in rows 16-25 (first expansion at row 16)
-    // - Row 39: if data is in rows 26+ (second expansion at row 26)
+    // - Row 39: if data is in rows 26-35 (second expansion at row 26)
+    // - Row 59: if data is in rows 36+ (third expansion at row 36)
     let totalsRowNumber;
-    if (lastDataRow >= 26) {
+    if (lastDataRow >= 36) {
+      totalsRowNumber = 59; // Data has expanded past row 36 (third expansion)
+    } else if (lastDataRow >= 26) {
       totalsRowNumber = 39; // Data has expanded past row 26 (second expansion)
     } else if (lastDataRow >= 16) {
       totalsRowNumber = 29; // Data has expanded past row 16 (first expansion)
