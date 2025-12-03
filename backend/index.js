@@ -430,12 +430,10 @@ app.post("/api/docs/images/clear", async (req, res) => {
   try {
     const DOC_ID = getDocId();
     if (!DOC_ID) {
-      return res
-        .status(400)
-        .json({
-          message:
-            "Google Doc ID is not configured. Please set it in the Admin Panel.",
-        });
+      return res.status(400).json({
+        message:
+          "Google Doc ID is not configured. Please set it in the Admin Panel.",
+      });
     }
 
     const result = await clearDocImages(DOC_ID);
@@ -551,7 +549,9 @@ const server = app.listen(port, () => {
 // Handle server errors (like port already in use)
 server.on("error", (error) => {
   if (error.code === "EADDRINUSE") {
-    console.error(`Port ${port} is already in use. Please close the other application or use a different port.`);
+    console.error(
+      `Port ${port} is already in use. Please close the other application or use a different port.`
+    );
   } else {
     console.error("Server error:", error);
   }
