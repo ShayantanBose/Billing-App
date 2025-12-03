@@ -192,7 +192,7 @@ async function getSheetName(spreadsheetId) {
 }
 
 // Insert rows at a specific position without deleting existing data
-// Also copies row 19 content to row 29 after insertion (for totals/formulas)
+// Also copies totals row content after insertion (row 19→29 or row 29→39)
 async function insertRowsAtPosition(
   spreadsheetId,
   sheetName,
@@ -217,14 +217,19 @@ async function insertRowsAtPosition(
 
     const sheetId = sheet.properties.sheetId;
 
-    // Step 1: Read the content from row 19 BEFORE insertion
-    console.log("Reading row 19 content before insertion...");
-    const row19Data = await sheets.spreadsheets.values.get({
+    // Determine which row to read based on startRow
+    // If inserting at row 16: read row 19 (totals before first expansion)
+    // If inserting at row 26: read row 29 (totals after first expansion)
+    let sourceRow = startRow === 16 ? 19 : 29;
+    
+    // Step 1: Read the content from the source row BEFORE insertion
+    console.log(`Reading row ${sourceRow} content before insertion...`);
+    const sourceData = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: `${sheetName}!A19:J19`,
+      range: `${sheetName}!A${sourceRow}:J${sourceRow}`,
     });
-    const row19Values = row19Data.data.values?.[0] || [];
-    console.log("Row 19 content saved:", row19Values);
+    const sourceValues = sourceData.data.values?.[0] || [];
+    console.log(`Row ${sourceRow} content saved:`, sourceValues);
 
     // Step 2: Insert rows using batchUpdate
     await sheets.spreadsheets.batchUpdate({
@@ -248,16 +253,16 @@ async function insertRowsAtPosition(
 
     console.log(`Inserted ${numberOfRows} rows at position ${startRow}`);
 
-    // Step 3: Copy the saved content to row 29 (row 19 + 10 inserted rows)
-    if (row19Values.length > 0) {
-      const targetRow = 19 + numberOfRows; // Row 29 if we inserted 10 rows
-      console.log(`Copying row 19 content to row ${targetRow}...`);
+    // Step 3: Copy the saved content to the target row (source row + numberOfRows)
+    if (sourceValues.length > 0) {
+      const targetRow = sourceRow + numberOfRows; // Row 29 or 39 depending on expansion
+      console.log(`Copying row ${sourceRow} content to row ${targetRow}...`);
 
       await sheets.spreadsheets.values.update({
         spreadsheetId,
         range: `${sheetName}!A${targetRow}:J${targetRow}`,
         valueInputOption: "RAW",
-        resource: { values: [row19Values] },
+        resource: { values: [sourceValues] },
       });
 
       console.log(`Successfully copied content to row ${targetRow}`);
@@ -383,15 +388,18 @@ async function appendToSheet(spreadsheetId, data) {
     // Get the actual sheet name
     const sheetName = await getSheetName(spreadsheetId);
 
-    // Find the first empty row in the range 11-30 (expanded to handle 10 extra rows)
-    // Auto-expansion: When row 15 is filled (next write would be row 16), 10 new rows are automatically inserted
+    // Find the first empty row in the range 11-40 (expanded to handle two expansions of 10 rows each)
+    // Auto-expansion: 
+    // 1. When row 15 is filled (next write would be row 16), 10 new rows are inserted at row 16
+    // 2. When row 25 is filled (next write would be row 26), 10 new rows are inserted at row 26
     // This pushes existing data (like totals) down without erasing it
     let targetRow = 11;
     let slNo = 1;
-    let hasExpanded = false;
+    let hasExpandedAt16 = false;
+    let hasExpandedAt26 = false;
 
-    // Check each row from 11 to 30 to find the first empty one
-    for (let row = 11; row <= 30; row++) {
+    // Check each row from 11 to 40 to find the first empty one
+    for (let row = 11; row <= 40; row++) {
       const checkResp = await sheets.spreadsheets.values.get({
         spreadsheetId,
         range: `${sheetName}!A${row}`,
@@ -404,25 +412,36 @@ async function appendToSheet(spreadsheetId, data) {
         targetRow = row;
         slNo = row - 10; // Sl. No. = 1 for row 11, 2 for row 12, etc.
 
-        // If we're about to write to row 16 (meaning row 15 is filled), insert 10 new rows
-        // Insert at row 16 to push everything below down
-        if (targetRow === 16 && !hasExpanded) {
+        // First expansion: If we're about to write to row 16 (meaning row 15 is filled), insert 10 new rows
+        if (targetRow === 16 && !hasExpandedAt16) {
           console.log(
             "Row 15 is filled. Inserting 10 new rows at position 16..."
           );
           await insertRowsAtPosition(spreadsheetId, sheetName, 16, 10);
-          hasExpanded = true;
+          hasExpandedAt16 = true;
           console.log(
             "Successfully inserted 10 rows at position 16. Data below has been pushed down."
+          );
+        }
+
+        // Second expansion: If we're about to write to row 26 (meaning row 25 is filled), insert 10 new rows
+        if (targetRow === 26 && !hasExpandedAt26) {
+          console.log(
+            "Row 25 is filled. Inserting 10 new rows at position 26..."
+          );
+          await insertRowsAtPosition(spreadsheetId, sheetName, 26, 10);
+          hasExpandedAt26 = true;
+          console.log(
+            "Successfully inserted 10 rows at position 26. Data below has been pushed down."
           );
         }
 
         break;
       }
 
-      if (row === 30) {
+      if (row === 40) {
         throw new Error(
-          "Data range is full (rows 11-30). Please clear data before adding more entries."
+          "Data range is full (rows 11-40). Please clear data before adding more entries."
         );
       }
     }
@@ -484,7 +503,7 @@ async function appendToSheet(spreadsheetId, data) {
   }
 }
 
-// Update totals in row 19 (or row 29 if expansion has occurred at row 16)
+// Update totals in row 19, 29, or 39 depending on expansion state
 async function updateTotals(spreadsheetId) {
   try {
     if (!sheets) {
@@ -495,9 +514,9 @@ async function updateTotals(spreadsheetId) {
     // Get the actual sheet name
     const sheetName = await getSheetName(spreadsheetId);
 
-    // Find the last filled row in the data range (expanded to 30 to match appendToSheet)
+    // Find the last filled row in the data range (expanded to 40 to match appendToSheet)
     let lastDataRow = 11;
-    for (let row = 11; row <= 30; row++) {
+    for (let row = 11; row <= 40; row++) {
       const checkResp = await sheets.spreadsheets.values.get({
         spreadsheetId,
         range: `${sheetName}!A${row}`,
@@ -547,12 +566,17 @@ async function updateTotals(spreadsheetId) {
       if (!isNaN(valJ)) totalJ += valJ;
     });
 
-    // Determine totals row: row 19 if data is row 15 or below, row 29 if data is row 16 or above
+    // Determine totals row based on data expansion:
+    // - Row 19: if data is in rows 11-15 (no expansion yet)
+    // - Row 29: if data is in rows 16-25 (first expansion at row 16)
+    // - Row 39: if data is in rows 26+ (second expansion at row 26)
     let totalsRowNumber;
-    if (lastDataRow >= 16) {
-      totalsRowNumber = 29; // Data has expanded past row 16
+    if (lastDataRow >= 26) {
+      totalsRowNumber = 39; // Data has expanded past row 26 (second expansion)
+    } else if (lastDataRow >= 16) {
+      totalsRowNumber = 29; // Data has expanded past row 16 (first expansion)
     } else {
-      totalsRowNumber = 19; // Data is still in rows 11-15
+      totalsRowNumber = 19; // Data is still in rows 11-15 (no expansion)
     }
 
     const totalsRow = [
