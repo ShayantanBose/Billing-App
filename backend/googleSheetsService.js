@@ -191,6 +191,85 @@ async function getSheetName(spreadsheetId) {
   }
 }
 
+// Insert rows at a specific position without deleting existing data
+// Also copies row 19 content to row 29 after insertion (for totals/formulas)
+async function insertRowsAtPosition(
+  spreadsheetId,
+  sheetName,
+  startRow,
+  numberOfRows
+) {
+  try {
+    if (!sheets) {
+      const initialized = await initializeGoogleSheets();
+      if (!initialized) return false;
+    }
+
+    // Get the sheet ID (not the spreadsheet ID)
+    const sheetMetadata = await sheets.spreadsheets.get({ spreadsheetId });
+    const sheet = sheetMetadata.data.sheets?.find(
+      (s) => s.properties?.title === sheetName
+    );
+
+    if (!sheet) {
+      throw new Error(`Sheet "${sheetName}" not found`);
+    }
+
+    const sheetId = sheet.properties.sheetId;
+
+    // Step 1: Read the content from row 19 BEFORE insertion
+    console.log("Reading row 19 content before insertion...");
+    const row19Data = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${sheetName}!A19:J19`,
+    });
+    const row19Values = row19Data.data.values?.[0] || [];
+    console.log("Row 19 content saved:", row19Values);
+
+    // Step 2: Insert rows using batchUpdate
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      resource: {
+        requests: [
+          {
+            insertDimension: {
+              range: {
+                sheetId: sheetId,
+                dimension: "ROWS",
+                startIndex: startRow - 1, // 0-indexed, so row 16 = index 15
+                endIndex: startRow - 1 + numberOfRows, // Insert rows
+              },
+              inheritFromBefore: false, // Don't inherit formatting from row above
+            },
+          },
+        ],
+      },
+    });
+
+    console.log(`Inserted ${numberOfRows} rows at position ${startRow}`);
+
+    // Step 3: Copy the saved content to row 29 (row 19 + 10 inserted rows)
+    if (row19Values.length > 0) {
+      const targetRow = 19 + numberOfRows; // Row 29 if we inserted 10 rows
+      console.log(`Copying row 19 content to row ${targetRow}...`);
+
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `${sheetName}!A${targetRow}:J${targetRow}`,
+        valueInputOption: "RAW",
+        resource: { values: [row19Values] },
+      });
+
+      console.log(`Successfully copied content to row ${targetRow}`);
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Error inserting rows:", error);
+    return false;
+  }
+}
+
 // Create a new Google Sheet
 async function createSheet(title = "Receipts Database") {
   try {
@@ -301,14 +380,18 @@ async function appendToSheet(spreadsheetId, data) {
     }
 
     // Get the actual sheet name
+    // Get the actual sheet name
     const sheetName = await getSheetName(spreadsheetId);
 
-    // Find the first empty row in the range 11-20
+    // Find the first empty row in the range 11-30 (expanded to handle 10 extra rows)
+    // Auto-expansion: When row 15 is filled (next write would be row 16), 10 new rows are automatically inserted
+    // This pushes existing data (like totals) down without erasing it
     let targetRow = 11;
     let slNo = 1;
+    let hasExpanded = false;
 
-    // Check each row from 11 to 20 to find the first empty one
-    for (let row = 11; row <= 20; row++) {
+    // Check each row from 11 to 30 to find the first empty one
+    for (let row = 11; row <= 30; row++) {
       const checkResp = await sheets.spreadsheets.values.get({
         spreadsheetId,
         range: `${sheetName}!A${row}`,
@@ -320,12 +403,26 @@ async function appendToSheet(spreadsheetId, data) {
         // Found empty row
         targetRow = row;
         slNo = row - 10; // Sl. No. = 1 for row 11, 2 for row 12, etc.
+
+        // If we're about to write to row 16 (meaning row 15 is filled), insert 10 new rows
+        // Insert at row 16 to push everything below down
+        if (targetRow === 16 && !hasExpanded) {
+          console.log(
+            "Row 15 is filled. Inserting 10 new rows at position 16..."
+          );
+          await insertRowsAtPosition(spreadsheetId, sheetName, 16, 10);
+          hasExpanded = true;
+          console.log(
+            "Successfully inserted 10 rows at position 16. Data below has been pushed down."
+          );
+        }
+
         break;
       }
 
-      if (row === 20) {
+      if (row === 30) {
         throw new Error(
-          "Data range is full (rows 11-20). Please clear data before adding more entries."
+          "Data range is full (rows 11-30). Please clear data before adding more entries."
         );
       }
     }
@@ -387,7 +484,7 @@ async function appendToSheet(spreadsheetId, data) {
   }
 }
 
-// Update totals in row 19 for columns G, H, I, J (sum of rows 11-18)
+// Update totals in row 19 (or row 29 if expansion has occurred at row 16)
 async function updateTotals(spreadsheetId) {
   try {
     if (!sheets) {
@@ -398,10 +495,27 @@ async function updateTotals(spreadsheetId) {
     // Get the actual sheet name
     const sheetName = await getSheetName(spreadsheetId);
 
-    // Read data from rows 11-18 for columns G, H, I, J
+    // Find the last filled row in the data range (expanded to 30 to match appendToSheet)
+    let lastDataRow = 11;
+    for (let row = 11; row <= 30; row++) {
+      const checkResp = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `${sheetName}!A${row}`,
+      });
+      const cellValue = checkResp.data.values?.[0]?.[0];
+      if (cellValue && cellValue !== "") {
+        lastDataRow = row;
+      } else {
+        break; // Stop at first empty row
+      }
+    }
+
+    console.log(`Calculating totals from rows 11 to ${lastDataRow}`);
+
+    // Read data from rows 11 to lastDataRow for columns G, H, I, J
     const dataResp = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: `${sheetName}!G11:J18`,
+      range: `${sheetName}!G11:J${lastDataRow}`,
     });
 
     const values = dataResp.data.values || [];
@@ -433,7 +547,14 @@ async function updateTotals(spreadsheetId) {
       if (!isNaN(valJ)) totalJ += valJ;
     });
 
-    // Write totals to row 19
+    // Determine totals row: row 19 if data is row 15 or below, row 29 if data is row 16 or above
+    let totalsRowNumber;
+    if (lastDataRow >= 16) {
+      totalsRowNumber = 29; // Data has expanded past row 16
+    } else {
+      totalsRowNumber = 19; // Data is still in rows 11-15
+    }
+
     const totalsRow = [
       totalG.toFixed(2),
       totalH.toFixed(2),
@@ -443,13 +564,13 @@ async function updateTotals(spreadsheetId) {
 
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: `${sheetName}!G19:J19`,
+      range: `${sheetName}!G${totalsRowNumber}:J${totalsRowNumber}`,
       valueInputOption: "RAW",
       resource: { values: [totalsRow] },
     });
 
     console.log(
-      `Totals updated in "${sheetName}" row 19: G=${totalG.toFixed(
+      `Totals updated in "${sheetName}" row ${totalsRowNumber}: G=${totalG.toFixed(
         2
       )}, H=${totalH.toFixed(2)}, I=${totalI.toFixed(2)}, J=${totalJ.toFixed(
         2
